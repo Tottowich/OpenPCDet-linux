@@ -1,7 +1,7 @@
 import argparse
 import glob
 from pathlib import Path
-
+import time
 try:
     import open3d
     from visual_utils import open3d_vis_utils as V
@@ -48,6 +48,9 @@ class DemoDataset(DatasetTemplate):
             points = np.fromfile(self.sample_file_list[index], dtype=np.float32).reshape(-1, 4)
         elif self.ext == '.npy':
             points = np.load(self.sample_file_list[index])
+            print(points.shape)
+            points = np.concatenate((points,np.zeros((points.shape[0],1))),axis=1)
+            print(points.shape)
         else:
             raise NotImplementedError
 
@@ -93,12 +96,25 @@ def main():
     with torch.no_grad():
         for idx, data_dict in enumerate(demo_dataset):
             logger.info(f'Visualized sample index: \t{idx + 1}')
+            print(f"Before: {data_dict}")
             data_dict = demo_dataset.collate_batch([data_dict])
+            print(f"After: {data_dict}")
+            break
+            logger.info(f"Loading Data to GPU...")
             load_data_to_gpu(data_dict)
+            logger.info(f"data_dict.keys(): \t{data_dict.keys()}")
+            logger.info(f"data_dict['points'].shape: {data_dict['points'].shape}")
+            logger.info(f"data_dict['voxels'].shape: {data_dict['points'].shape}")
+            for key in data_dict:
+                logger.info(f"{key} shape: \t{data_dict[key]}")
+            logger.info(f"Running inference...")
+            start = time.time()
             pred_dicts, _ = model.forward(data_dict)
-
+            logger.info(f"Infrence time: {time.time() - start} <=> {1/(time.time() - start)} Hz")
+            logger.info(f"Predction keys : ·{pred_dicts[0].keys()}")
+            logger.info(f"Predicitons : ·{pred_dicts[0]}")
             V.draw_scenes(
-                points=data_dict['points'][:, 1:], ref_boxes=pred_dicts[0]['pred_boxes'],
+                points=data_dict['points'][:,1:], ref_boxes=pred_dicts[0]['pred_boxes'],
                 ref_scores=pred_dicts[0]['pred_scores'], ref_labels=pred_dicts[0]['pred_labels']
             )
 

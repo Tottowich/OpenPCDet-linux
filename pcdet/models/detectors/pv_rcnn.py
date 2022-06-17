@@ -7,9 +7,12 @@ class PVRCNN(Detector3DTemplate):
         self.module_list = self.build_networks()
 
     def forward(self, batch_dict):
+        print("PVRCNN - forward")
+        print(batch_dict.keys())        
         for cur_module in self.module_list:
+            print(cur_module)
             batch_dict = cur_module(batch_dict)
-
+        print(batch_dict.keys())
         if self.training:
             loss, tb_dict, disp_dict = self.get_training_loss()
 
@@ -18,6 +21,7 @@ class PVRCNN(Detector3DTemplate):
             }
             return ret_dict, tb_dict, disp_dict
         else:
+            print("PVRCNN - post processing")
             pred_dicts, recall_dicts = self.post_processing(batch_dict)
             return pred_dicts, recall_dicts
 

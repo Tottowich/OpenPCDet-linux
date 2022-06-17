@@ -72,6 +72,66 @@ def draw_scenes(points, gt_boxes=None, ref_boxes=None, ref_labels=None, ref_scor
     vis.run()
     vis.destroy_window()
 
+def create_live_scene(points, gt_boxes=None, ref_boxes=None, ref_labels=None, ref_scores=None, point_colors=None, draw_origin=True):
+    if isinstance(points, torch.Tensor):
+        points = points.cpu().numpy()
+    if isinstance(gt_boxes, torch.Tensor):
+        gt_boxes = gt_boxes.cpu().numpy()
+    if isinstance(ref_boxes, torch.Tensor):
+        ref_boxes = ref_boxes.cpu().numpy()
+
+    vis = open3d.visualization.Visualizer()
+    vis.create_window()
+
+    vis.get_render_option().point_size = 1.0
+    vis.get_render_option().background_color = np.zeros(3)
+
+    # draw origin
+    if draw_origin:
+        axis_pcd = open3d.geometry.TriangleMesh.create_coordinate_frame(size=1.0, origin=[0, 0, 0])
+        vis.add_geometry(axis_pcd)
+
+    pts = open3d.geometry.PointCloud()
+    pts.points = open3d.utility.Vector3dVector(points[:, :3])
+
+    vis.add_geometry(pts)
+    if point_colors is None:
+        pts.colors = open3d.utility.Vector3dVector(np.ones((points.shape[0], 3)))
+    else:
+        pts.colors = open3d.utility.Vector3dVector(point_colors)
+
+    if gt_boxes is not None:
+        vis = draw_box(vis, gt_boxes, (0, 0, 1))
+
+    if ref_boxes is not None:
+        vis = draw_box(vis, ref_boxes, (0, 1, 0), ref_labels, ref_scores)
+    return vis
+def update_live_scene(vis,points, gt_boxes=None, ref_boxes=None, ref_labels=None, ref_scores=None, point_colors=None, draw_origin=True):
+    if isinstance(points, torch.Tensor):
+        points = points.cpu().numpy()
+    if isinstance(gt_boxes, torch.Tensor):
+        gt_boxes = gt_boxes.cpu().numpy()
+    if isinstance(ref_boxes, torch.Tensor):
+        ref_boxes = ref_boxes.cpu().numpy()
+    
+    #vis.remove_all_geometries()
+    #vis.remove_all_labels()
+    if draw_origin:
+        axis_pcd = open3d.geometry.TriangleMesh.create_coordinate_frame(size=0.5, origin=[0, 0, 0])
+        vis.add_geometry(axis_pcd)
+    pts = open3d.geometry.PointCloud()
+    pts.points = open3d.utility.Vector3dVector(points[:, :3])
+    if point_colors is None:
+        pts.colors = open3d.utility.Vector3dVector(np.ones((points.shape[0], 3)))
+    else:
+        pts.colors = open3d.utility.Vector3dVector(point_colors)
+    vis.update_geometry(pts)
+    if gt_boxes is not None:
+        vis = draw_box(vis, gt_boxes, (0, 0, 1))
+    if ref_boxes is not None:
+        vis = draw_box(vis, ref_boxes, (0, 1, 0), ref_labels, ref_scores)
+    vis.poll_events()
+    vis.update_renderer()
 
 def translate_boxes_to_open3d_instance(gt_boxes):
     """
@@ -106,7 +166,7 @@ def draw_box(vis, gt_boxes, color=(0, 1, 0), ref_labels=None, score=None):
         if ref_labels is None:
             line_set.paint_uniform_color(color)
         else:
-            line_set.paint_uniform_color(box_colormap[ref_labels[i]])
+            line_set.paint_uniform_color(box_colormap[ref_labels[i]%4])
 
         vis.add_geometry(line_set)
 

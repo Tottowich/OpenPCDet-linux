@@ -17,7 +17,7 @@ DATA_CONFIG:
               SAMPLE_GROUPS: ['Car:15','Pedestrian:10', 'Cyclist:10']
               NUM_POINT_FEATURES: 4
               DATABASE_WITH_FAKELIDAR: False
-              REMOVE_EXTRA_WIDTH: [0.0, 0.0, 0.0]
+              REMOVE_EXTRA_WIDTH: [-10.0, 0.0, 0.0]
               LIMIT_WHOLE_SCENE: False
 
             - NAME: random_world_flip

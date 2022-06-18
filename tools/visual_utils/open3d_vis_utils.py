@@ -114,8 +114,8 @@ def update_live_scene(vis,points, gt_boxes=None, ref_boxes=None, ref_labels=None
     if isinstance(ref_boxes, torch.Tensor):
         ref_boxes = ref_boxes.cpu().numpy()
     
-    #vis.remove_all_geometries()
-    #vis.remove_all_labels()
+    vis.clear_geometries()
+    #vis.remove_labels()
     if draw_origin:
         axis_pcd = open3d.geometry.TriangleMesh.create_coordinate_frame(size=0.5, origin=[0, 0, 0])
         vis.add_geometry(axis_pcd)
@@ -125,7 +125,7 @@ def update_live_scene(vis,points, gt_boxes=None, ref_boxes=None, ref_labels=None
         pts.colors = open3d.utility.Vector3dVector(np.ones((points.shape[0], 3)))
     else:
         pts.colors = open3d.utility.Vector3dVector(point_colors)
-    vis.update_geometry(pts)
+    vis.add_geometry(pts)
     if gt_boxes is not None:
         vis = draw_box(vis, gt_boxes, (0, 0, 1))
     if ref_boxes is not None:

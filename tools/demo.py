@@ -2,6 +2,10 @@ import argparse
 import glob
 from pathlib import Path
 import time
+import re
+import sys
+#sys.path.insert(0, '../../OusterTesting')
+#import utils_ouster
 try:
     import open3d
     from visual_utils import open3d_vis_utils as V
@@ -19,6 +23,10 @@ from pcdet.datasets import DatasetTemplate
 from pcdet.models import build_network, load_data_to_gpu
 from pcdet.utils import common_utils
 
+def sorted_alphanumeric(data):
+    convert = lambda text: int(text) if text.isdigit() else text.lower()
+    alphanum_key = lambda key: [ convert(c) for c in re.split('([0-9]+)', key) ] 
+    return sorted(data, key=alphanum_key)
 
 class DemoDataset(DatasetTemplate):
     def __init__(self, dataset_cfg, class_names, training=True, root_path=None, logger=None, ext='.bin'):
@@ -37,7 +45,7 @@ class DemoDataset(DatasetTemplate):
         self.ext = ext
         data_file_list = glob.glob(str(root_path / f'*{self.ext}')) if self.root_path.is_dir() else [self.root_path]
 
-        data_file_list.sort()
+        data_file_list = sorted_alphanumeric(data_file_list)
         self.sample_file_list = data_file_list
 
     def __len__(self):
@@ -93,30 +101,36 @@ def main():
     model.load_params_from_file(filename=args.ckpt, logger=logger, to_cpu=True)
     model.cuda()
     model.eval()
+    
     with torch.no_grad():
         for idx, data_dict in enumerate(demo_dataset):
+            start = time.time()
             logger.info(f'Visualized sample index: \t{idx + 1}')
-            print(f"Before: {data_dict}")
+            #print(f"Before: {data_dict}")
             data_dict = demo_dataset.collate_batch([data_dict])
-            print(f"After: {data_dict}")
-            break
+            #print(f"After: {data_dict}")
             logger.info(f"Loading Data to GPU...")
             load_data_to_gpu(data_dict)
-            logger.info(f"data_dict.keys(): \t{data_dict.keys()}")
-            logger.info(f"data_dict['points'].shape: {data_dict['points'].shape}")
-            logger.info(f"data_dict['voxels'].shape: {data_dict['points'].shape}")
-            for key in data_dict:
-                logger.info(f"{key} shape: \t{data_dict[key]}")
+            #logger.info(f"data_dict.keys(): \t{data_dict.keys()}")
+            #logger.info(f"data_dict['points'].shape: {data_dict['points'].shape}")
+            #logger.info(f"data_dict['voxels'].shape: {data_dict['points'].shape}")
+            #for key in data_dict:
+            #    logger.info(f"{key} shape: \t{data_dict[key]}")
             logger.info(f"Running inference...")
-            start = time.time()
             pred_dicts, _ = model.forward(data_dict)
+            #logger.info(f"Predction keys : ·{pred_dicts[0].keys()}")
+            #logger.info(f"Predicitons : ·{pred_dicts[0]}")
+            if idx==0:
+                vis = V.create_live_scene(points=data_dict['points'][:,1:], ref_boxes=pred_dicts[0]['pred_boxes'],
+                    ref_scores=pred_dicts[0]['pred_scores'], ref_labels=pred_dicts[0]['pred_labels'])
+            else:
+                V.update_live_scene(vis,points=data_dict['points'][:,1:], ref_boxes=pred_dicts[0]['pred_boxes'],
+                    ref_scores=pred_dicts[0]['pred_scores'], ref_labels=pred_dicts[0]['pred_labels'])
             logger.info(f"Infrence time: {time.time() - start} <=> {1/(time.time() - start)} Hz")
-            logger.info(f"Predction keys : ·{pred_dicts[0].keys()}")
-            logger.info(f"Predicitons : ·{pred_dicts[0]}")
-            V.draw_scenes(
-                points=data_dict['points'][:,1:], ref_boxes=pred_dicts[0]['pred_boxes'],
-                ref_scores=pred_dicts[0]['pred_scores'], ref_labels=pred_dicts[0]['pred_labels']
-            )
+                #V.draw_scenes(
+                #    points=data_dict['points'][:,1:], ref_boxes=pred_dicts[0]['pred_boxes'],
+                #    ref_scores=pred_dicts[0]['pred_scores'], ref_labels=pred_dicts[0]['pred_labels']
+                #)
 
             if not OPEN3D_FLAG:
                 mlab.show(stop=True)

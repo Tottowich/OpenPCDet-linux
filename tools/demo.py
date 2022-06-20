@@ -114,18 +114,12 @@ def main():
     with torch.no_grad():
         for idx, data_dict in enumerate(demo_dataset):
             logger.info(f'Visualized sample index: \t{idx + 1}')
-            #print(f"Before: {data_dict}")
             data_dict = demo_dataset.collate_batch([data_dict])
-            #print(f"After: {data_dict}")
             logger.info(f"Loading Data to GPU...")
             start = time.time()
             load_data_to_gpu(data_dict)
             logger.info(f"Loading Data to GPU loading took {time.time() - start:.5f} s.")
-            #logger.info(f"data_dict.keys(): \t{data_dict.keys()}")
-            #logger.info(f"data_dict['points'].shape: {data_dict['points'].shape}")
-            #logger.info(f"data_dict['voxels'].shape: {data_dict['points'].shape}")
-            #for key in data_dict:
-            #    logger.info(f"{key} shape: \t{data_dict[key]}")
+            
             logger.info(f"Running inference...")
             start = time.time()
             pred_dicts, _ = model.forward(data_dict)

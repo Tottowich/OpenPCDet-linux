@@ -59,9 +59,9 @@ class DemoDataset(DatasetTemplate):
             points = np.fromfile(self.sample_file_list[index], dtype=np.float32).reshape(-1, 4)
         elif self.ext == '.npy':
             points = np.load(self.sample_file_list[index])
-            print(points.shape)
+            #if len(points.shape) == 5 and len(self.dataset_cfg.POINT_FEATURE_ENCODING.used_feature_list) == 5:
+                #print('Warning: The point cloud has 4 features, but the dataset config uses 5 features. ')
             points = np.concatenate((points,np.zeros((points.shape[0],1))),axis=1)
-            print(points.shape)
         else:
             raise NotImplementedError
 
@@ -73,7 +73,13 @@ class DemoDataset(DatasetTemplate):
         data_dict = self.prepare_data(data_dict=input_dict)
         return data_dict
 
-
+def display_predictions(pred_dict, class_names, logger=None):
+    if logger is None:
+        return
+    logger.info(f"Model detected: {len(pred_dict[0]['pred_labels'])} objects.")
+    for lbls,score in zip(pred_dict[0]['pred_labels'],pred_dict[0]['pred_scores']):
+        logger.info(f"\t Prediciton {class_names[lbls-1]} with confidence: {score}.")
+    
 def parse_config():
     parser = argparse.ArgumentParser(description='arg parser')
     parser.add_argument('--cfg_file', type=str, default='cfgs/kitti_models/second.yaml',
@@ -124,6 +130,9 @@ def main():
             start = time.time()
             pred_dicts, _ = model.forward(data_dict)
             logger.info(f"Infrence time: {time.time() - start:.5f} <=> {1/(time.time() - start):.5f} Hz")
+            if len(pred_dicts[0]['pred_labels']) > 0:
+                display_predictions(pred_dicts,cfg.CLASS_NAMES,logger)
+            
             #logger.info(f"Predction keys : ·{pred_dicts[0].keys()}")
             #logger.info(f"Predicitons : ·{pred_dicts[0]}")
             if idx==0: # This could be run on a seperate thread!
@@ -132,7 +141,7 @@ def main():
                 #                                ref_scores=pred_dicts[0]['pred_scores'], 
                 #                                ref_labels=pred_dicts[0]['pred_labels'],
                 #                                class_names=cfg.CLASS_NAMES)
-                vis = LiveVisualizer(100,True,class_names=cfg.CLASS_NAMES,first_cloud=data_dict['points'][:,1:])
+                vis = LiveVisualizer(59,True,class_names=cfg.CLASS_NAMES,first_cloud=data_dict['points'][:,1:])
                 vis.update(points=data_dict['points'][:,1:], 
                             ref_boxes=pred_dicts[0]['pred_boxes'],
                             ref_labels=pred_dicts[0]['pred_labels'],
@@ -147,7 +156,7 @@ def main():
                             ref_labels=pred_dicts[0]['pred_labels'],
                             class_names=cfg.CLASS_NAMES,
                             )
-                logger.info(f"Visual time: {time.time() - start:.5f} <=> {1/(time.time() - start):.5f} Hz")
+                logger.info(f"Visual time: {time.time() - start:.5f} <=> {1/(time.time() - start):.5f} Hz\n")
            
             #V.draw_scenes(
             #    points=data_dict['points'][:,1:], ref_boxes=pred_dicts[0]['pred_boxes'],
@@ -156,7 +165,7 @@ def main():
 
             if not OPEN3D_FLAG:
                 mlab.show(stop=True)
-
+    input("Press \'Enter\' to exit demo...")
     logger.info('Demo done.')
 
 

@@ -232,9 +232,11 @@ def translate_boxes_to_open3d_instance(gt_boxes):
           |/        |/
           2---------0
     """
+
     center = gt_boxes[0:3]
     lwh = gt_boxes[3:6]
     axis_angles = np.array([0, 0, gt_boxes[6] + 1e-10])
+    #print(f"Center: {center}, lwh: {lwh}, axis_angles: {axis_angles}")
     rot = open3d.geometry.get_rotation_matrix_from_axis_angle(axis_angles)
     box3d = open3d.geometry.OrientedBoundingBox(center, rot, lwh)
 
@@ -245,7 +247,7 @@ def translate_boxes_to_open3d_instance(gt_boxes):
     #lines = np.concatenate([lines, np.array([[1, 4], [7, 6]])], axis=0)
 
     #line_set.lines = open3d.utility.Vector2iVector(lines)
-
+    #print(f"Line set: {np.array(line_set.lines)}")
     return line_set, box3d
 
 
@@ -348,40 +350,54 @@ class LiveVisualizer:
         self.vis.poll_events()
         self.vis.update_renderer()
     def update_bboxes(self, bboxes, scores, labels, class_names):
-        print(f"BBoxes: {bboxes.shape}")
-        print(f"Labels: {labels.shape}")
+        #print(f"BBoxes: {bboxes.shape}")
+        #print(f"Labels: {labels.shape}")
         if self.shown_bboxes is not None:
             for i in range(self.max_bboxes):
                 if i < bboxes.shape[0]:
-                    print(f"label {labels[i]}")
-                    print(f"Showing Box {i}")
-                    line_set, box3d = translate_boxes_to_open3d_instance(bboxes[i])
-                    self.shown_bboxes[i].lines = line_set.lines
-                    self.shown_bboxes[i].paint_uniform_color(box_colormap[labels[i]%4])
+                    #print(f"label {labels[i]}")
+                    #print(f"Showing Box {i}")
+                    box3d = translate_boxes_to_open3d_instance(bboxes[i])
+                    axis_angles = np.array([0, 0, bboxes[i][6] + 1e-10])
+
+                    self.shown_bboxes[i].R = open3d.geometry.get_rotation_matrix_from_axis_angle(axis_angles)
+                    self.shown_bboxes[i].center = bboxes[i][:3]
+                    self.shown_bboxes[i].extent = bboxes[i][3:6]
+                    self.shown_bboxes[i].color = box_colormap[labels[i]%4]  
+                    
+                    #self.shown_bboxes[i].lines = line_set.lines
+                    #self.shown_bboxes[i].paint_uniform_color(box_colormap[labels[i]%4])
                     self.vis.update_geometry(self.shown_bboxes[i])
+                    self.vis.poll_events()
+                    self.vis.update_renderer()
                 elif i < self.previous_num_bboxes:
                     #self.shown_bboxes[i] = self.zero_bounding_box()
-                    print(f"Hiding Box {i}")
-                    self.shown_bboxes[i].paint_uniform_color([0,0,0])
+                    #print(f"Hiding Box {i}")
+                    self.shown_bboxes[i].center = [0,0,0]
+                    self.shown_bboxes[i].extent = [0,0,0]
+                    self.shown_bboxes[i].color = [0,0,0]
                     self.vis.update_geometry(self.shown_bboxes[i])
+                    self.vis.poll_events()
+                    self.vis.update_renderer()
                 else:
+                    self.previous_num_bboxes = len(bboxes)
                     break
     def zero_bounding_box(self,color=[0, 0, 0]):
         axis_angles = np.array([0, 0,  1e-10])
         rot = open3d.geometry.get_rotation_matrix_from_axis_angle(axis_angles)
         box3d = open3d.geometry.OrientedBoundingBox(np.array([0,0,0]), rot,np.array([0,0,0]))
-        line_set = open3d.geometry.LineSet.create_from_oriented_bounding_box(box3d)
-        line_set = line_set.paint_uniform_color([0,0,0])
-        return line_set
+        box3d.color = [0.0,0.0,0.0]
+        #line_set = open3d.geometry.LineSet.create_from_oriented_bounding_box(box3d)
+        #line_set = line_set.paint_uniform_color([1,0,0])
+        return box3d
     def initialize_bboxes(self):
         self.shown_bboxes = []
         for i in range(self.max_bboxes):
-            line_set = self.zero_bounding_box()
-            self.shown_bboxes.append(line_set)
+            box3d = self.zero_bounding_box()
+            self.shown_bboxes.append(box3d)
             self.vis.add_geometry(self.shown_bboxes[i])
-        
-        self.vis.poll_events()
-        self.vis.update_renderer()
+            self.vis.poll_events()
+            self.vis.update_renderer()
         return self.shown_bboxes
     def _translate_boxes_to_open3d_instance(gt_boxes):
         """

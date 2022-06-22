@@ -4,7 +4,10 @@ from pathlib import Path
 import time
 import re
 import sys
+import socket
+from transmitter import Transmitter
 from matplotlib.pyplot import cla
+
 
 from tools.visual_utils.open3d_vis_utils import LiveVisualizer
 #sys.path.insert(0, '../../OusterTesting')
@@ -25,8 +28,15 @@ from pcdet.config import cfg, cfg_from_yaml_file
 from pcdet.datasets import DatasetTemplate
 from pcdet.models import build_network, load_data_to_gpu
 from pcdet.utils import common_utils
+from pythonosc import udp_client
 
 def sorted_alphanumeric(data):
+    """
+    Sort the given iterable in the way that humans expect.
+    Args:
+        data: An iterable.
+    Returns: sorted version of the given iterable.
+    """
     convert = lambda text: int(text) if text.isdigit() else text.lower()
     alphanum_key = lambda key: [ convert(c) for c in re.split('([0-9]+)', key) ] 
     return sorted(data, key=alphanum_key)
@@ -105,12 +115,13 @@ def main():
         root_path=Path(args.data_path), ext=args.ext, logger=logger
     )
     logger.info(f'Total number of samples: \t{len(demo_dataset)}')
-
+    transmitter = Transmitter(reciever_ip="192.168.200.103", reciever_port= 7002)
     model = build_network(model_cfg=cfg.MODEL, num_class=len(cfg.CLASS_NAMES), dataset=demo_dataset)
     model.load_params_from_file(filename=args.ckpt, logger=logger, to_cpu=True)
     model.cuda()
     model.eval()
     #vis = LiveVisualizer(100,True)
+    client = udp_client.SimpleUDPClient(args.ip, args.port)
     with torch.no_grad():
         for idx, data_dict in enumerate(demo_dataset):
             logger.info(f'Visualized sample index: \t{idx + 1}')
@@ -123,10 +134,11 @@ def main():
             logger.info(f"Running inference...")
             start = time.time()
             pred_dicts, _ = model.forward(data_dict)
+            if transmitter is not None:
+                transmitter.send_dict(copy(pred_dicts[0]))
             logger.info(f"Infrence time: {time.time() - start:.5f} <=> {1/(time.time() - start):.5f} Hz")
             if len(pred_dicts[0]['pred_labels']) > 0:
                 display_predictions(pred_dicts,cfg.CLASS_NAMES,logger)
-            
             #logger.info(f"Predction keys : ·{pred_dicts[0].keys()}")
             #logger.info(f"Predicitons : ·{pred_dicts[0]}")
             if idx==0: # This could be run on a seperate thread!

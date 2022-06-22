@@ -279,6 +279,7 @@ class LiveVisualizer:
                     show_labels=False,
                     class_names=None,
                     first_cloud=None,
+                    classes_to_visualize=None
                 ):
         """
         Args:
@@ -294,6 +295,11 @@ class LiveVisualizer:
         self.class_names = class_names
         self.lidar_points = open3d.geometry.PointCloud()
         self.vis = open3d.visualization.Visualizer()
+        if classes_to_visualize is not None:
+            self.classes_to_visualize = [class_names[x] for x in classes_to_visualize]
+            print(f"Classes to visualize: {self.classes_to_visualize}")
+        else:
+            self.classes_to_visualize = class_names
         self.initialize_visual()
         self.shown_bboxes = None
         self.shown_bboxes = self.initialize_bboxes()
@@ -355,21 +361,20 @@ class LiveVisualizer:
         if self.shown_bboxes is not None:
             for i in range(self.max_bboxes):
                 if i < bboxes.shape[0]:
-                    #print(f"label {labels[i]}")
-                    #print(f"Showing Box {i}")
-                    box3d = translate_boxes_to_open3d_instance(bboxes[i])
-                    axis_angles = np.array([0, 0, bboxes[i][6] + 1e-10])
+                    if class_names[labels[i]-1] in self.classes_to_visualize:
+                        box3d = translate_boxes_to_open3d_instance(bboxes[i])
+                        axis_angles = np.array([0, 0, bboxes[i][6] + 1e-10])
 
-                    self.shown_bboxes[i].R = open3d.geometry.get_rotation_matrix_from_axis_angle(axis_angles)
-                    self.shown_bboxes[i].center = bboxes[i][:3]
-                    self.shown_bboxes[i].extent = bboxes[i][3:6]
-                    self.shown_bboxes[i].color = box_colormap[labels[i]%4]  
-                    
-                    #self.shown_bboxes[i].lines = line_set.lines
-                    #self.shown_bboxes[i].paint_uniform_color(box_colormap[labels[i]%4])
-                    self.vis.update_geometry(self.shown_bboxes[i])
-                    self.vis.poll_events()
-                    self.vis.update_renderer()
+                        self.shown_bboxes[i].R = open3d.geometry.get_rotation_matrix_from_axis_angle(axis_angles)
+                        self.shown_bboxes[i].center = bboxes[i][:3]
+                        self.shown_bboxes[i].extent = bboxes[i][3:6]
+                        self.shown_bboxes[i].color = box_colormap[labels[i]%4]  
+                        
+                        #self.shown_bboxes[i].lines = line_set.lines
+                        #self.shown_bboxes[i].paint_uniform_color(box_colormap[labels[i]%4])
+                        self.vis.update_geometry(self.shown_bboxes[i])
+                        self.vis.poll_events()
+                        self.vis.update_renderer()
                 elif i < self.previous_num_bboxes:
                     #self.shown_bboxes[i] = self.zero_bounding_box()
                     #print(f"Hiding Box {i}")

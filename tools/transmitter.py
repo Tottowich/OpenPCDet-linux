@@ -49,32 +49,45 @@ class Transmitter():
         Args:
             dict: Dictionary to send.
         """
+        """
         #dict_selective = {"pred_boxes": [], "pred_labels": [], "pred_scores": []}
-        for key, value in (self.pred_dict.items()):
-            if isinstance(value,torch.Tensor):
-                self.pred_dict[key] = value.detach().cpu().tolist()
-            if isinstance(value, np.ndarray):
-                self.pred_dict[key] = value.tolist()
+        #for key, value in (self.pred_dict.items()):
+        #    if isinstance(value,torch.Tensor):
+        #        self.pred_dict[key] = value.detach().cpu().tolist()
+            #if isinstance(value, np.ndarray):
+            #    self.pred_dict[key] = value.tolist()
+        """
+        if isinstance(self.pred_dict["pred_labels"],torch.Tensor):
+            self.pred_dict["pred_labels"] = self.pred_dict["pred_labels"].cpu().numpy()
         if self.classes_to_send is not None:
             indices = [np.nonzero(sum(self.pred_dict["pred_labels"]==x for x in self.classes_to_send))[0].tolist()][0]
+            
             self.pred_dict["pred_boxes"] = self.pred_dict["pred_boxes"][indices,:].tolist()
             self.pred_dict["pred_labels"] = self.pred_dict["pred_labels"][indices,:].tolist()
             self.pred_dict["pred_scores"] = self.pred_dict["pred_scores"][indices,:].tolist()
-            #for i,v in enumerate(self.pred_dict["pred_labels"]):
-                #print(v)
-            #    if v in self.classes_to_send:
-            #        dict_selective['pred_boxes'].append(self.pred_dict["pred_boxes"][i])
-            #        dict_selective['pred_labels'].append(self.pred_dict["pred_labels"][i])
-            #        dict_selective['pred_scores'].append(self.pred_dict["pred_scores"][i])
-            #self.pred_dict = dict_selective
-        #dict["pcd"] = pcd.tolist()
+        """
+            for i,v in enumerate(self.pred_dict["pred_labels"]):
+                print(v)
+                if v in self.classes_to_send:
+                    dict_selective['pred_boxes'].append(self.pred_dict["pred_boxes"][i])
+                    dict_selective['pred_labels'].append(self.pred_dict["pred_labels"][i])
+                    dict_selective['pred_scores'].append(self.pred_dict["pred_scores"][i])
+            self.pred_dict = dict_selective
+        dict["pcd"] = pcd.tolist()
+        """
         predictions_encoded = json.dumps(self.pred_dict).encode('utf-8')
         try:
             self.s_udp.sendto(predictions_encoded, (self.reciever_ip, self.reciever_port))
         except:
             print(f"Could not send to {self.reciever_ip}")
-        self.pred_dict = None
+        #self.pred_dict = None
     def send_pcd(self):
+        if isinstance(self.pred_dict["pred_labels"],torch.Tensor):
+            self.pred_dict["pred_labels"] = self.pred_dict["pred_labels"].cpu().numpy()
+        indices = np.nonzero(sum(self.pred_dict["pred_labels"]==x for x in self.classes_to_send))[0].tolist()
+        pred_send = np.concatenate((self.pred_dict["pred_boxes"][indices,:],self.pred_dict["pred_labels"][indices,:],self.pred_dict["pred_scores"][indices,:]),axis=1)
+        self.s_ml.send(self.pcd)
+        self.s_ml.send(pred_send)
 
         pass
     def start_transmit_ml(self):
@@ -84,9 +97,12 @@ class Transmitter():
         try: 
             self.s_ml.connect((self.ml_reciever_ip,self.ml_reciever_port))
             self.started_ml = True
-            #self.thread_udp = threading.Thread(target=self.transmit_udp)
-            #self.thread_udp.daemon = True
-            #self.thread_udp.start()
+            """
+            self.thread_udp = threading.Thread(target=self.transmit_udp)
+            self.thread_udp.daemon = True
+            self.thread_udp.start()
+            """
+            
             return True
         except:
             return False
@@ -122,9 +138,12 @@ class Transmitter():
         try: 
             self.s_udp.connect((self.reciever_ip,self.reciever_port))
             self.started_udp = True
-            #self.thread_udp = threading.Thread(target=self.transmit_udp)
-            #self.thread_udp.daemon = True
-            #self.thread_udp.start()
+            """
+            self.thread_udp = threading.Thread(target=self.transmit_udp)
+            self.thread_udp.daemon = True
+            self.thread_udp.start()
+            
+            """
             return True
         except:
             return False

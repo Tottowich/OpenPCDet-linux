@@ -70,14 +70,23 @@ def parse_config():
                         help='specify the config for demo')
     parser.add_argument('--ckpt', type=str, default=None, help='specify the pretrained model')
     parser.add_argument('--ext', type=str, default='.bin', help='specify the extension of your point cloud data file')
-    parser.add_argument('--ip', type=str, default=None, help='specify the ip of the sensor')
+    parser.add_argument('--OU_ip', type=str, default=None, help='specify the ip of the sensor')
+    parser.add_argument('--UE5_ip', type=str, default=None, help='specify the ip of the UE5 machine')
+    parser.add_argument('--TD_ip', type=str, default=None, help='specify the ip of the TD machine')
+
     parser.add_argument('--name', type=str, default=None, help='specify the name of the sensor')
     parser.add_argument('--udp_port', type=int, default=7502, help='specify the udp port of the sensor')
     parser.add_argument('--tcp_port', type=int, default=7503, help='specify the tcp port of the sensor')
+    parser.add_argument('--TD_port', type=int, default=7002, help='specify the port of the TD machine')
+    parser.add_argument('--UE5_port', type=int, default=7000, help='specify the port of the UE5 machine')
     parser.add_argument('--time', type=int, default=100
     , help='specify the tcp port of the sensor')
-    parser.add_argument("--visualize",type=bool, default=False, help="visualize the point cloud")
-
+    if sys.version_info >= (3,9):
+        parser.add_argument('--visualize', action=argparse.BooleanOptionalAction)
+    else:
+        parser.add_argument('--visualize', action='store_true')
+        parser.add_argument('--no-visualize', dest='visualize', action='store_false')
+        parser.set_defaults(feature=True)
     args = parser.parse_args()
 
     cfg_from_yaml_file(args.cfg_file, cfg)
@@ -100,7 +109,7 @@ def main():
     [cfg_ouster, host_ouster] = utils_ouster.sensor_config(args.name if args.name is not None else args.ip,args.udp_port,args.tcp_port)
     transmitter.start_transmit_udp()
     transmitter.start_transmit_pcd()
-    
+
     with closing(client.Scans.stream(host_ouster, args.udp_port,complete=False)) as stream:
         logger.info(f"Streaming lidar data: {cfg.MODEL.NAME}:")
         start_stream = time.time()
@@ -126,6 +135,7 @@ def main():
 
             if transmitter.started_ml:
                 transmitter.pcd = copy(data_dict["points"][:,1:])
+                transmitter.pred_dict = copy(pred_dicts[0])
                 transmitter.send_pcd()
 
             if transmitter.started_udp:

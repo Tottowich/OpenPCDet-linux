@@ -99,6 +99,8 @@ def main():
     transmitter = Transmitter(reciever_ip="192.168.200.103", reciever_port=7002, classes_to_send=[9])
     [cfg_ouster, host_ouster] = utils_ouster.sensor_config(args.name if args.name is not None else args.ip,args.udp_port,args.tcp_port)
     transmitter.start_transmit_udp()
+    transmitter.start_transmit_pcd()
+    
     with closing(client.Scans.stream(host_ouster, args.udp_port,complete=False)) as stream:
         logger.info(f"Streaming lidar data: {cfg.MODEL.NAME}:")
         start_stream = time.time()
@@ -122,9 +124,15 @@ def main():
             if len(pred_dicts[0]['pred_labels']) > 0:
                 display_predictions(pred_dicts,cfg.CLASS_NAMES,logger)
 
-            if transmitter is not None:
+            if transmitter.started_ml:
+                transmitter.pcd = copy(data_dict["points"][:,1:])
+                transmitter.send_pcd()
+
+            if transmitter.started_udp:
                 #transmitter.pcd = copy(data_dict['points'][:,1:])
+                start = time.time()
                 transmitter.pred_dict = copy(pred_dicts[0])
+                transmitter.send_dict("udp")
 
             #logger.info(f"Frame {live.frame}")
             if live.frame == 1 and args.visualize:

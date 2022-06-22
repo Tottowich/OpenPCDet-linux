@@ -93,7 +93,7 @@ def main():
     logger = common_utils.create_logger()
     live = live_stream(cfg.DATA_CONFIG, cfg.CLASS_NAMES, logger=logger)
     model = initialize_network(cfg,args,logger,live)
-    transmitter = Transmitter(reciever_ip="192.168.200.103", reciever_port=1234)
+    transmitter = Transmitter(reciever_ip="192.168.200.103", reciever_port=7002)
     [cfg_ouster, host_ouster] = utils_ouster.sensor_config(args.name if args.name is not None else args.ip,args.udp_port,args.tcp_port)
     with closing(client.Scans.stream(host_ouster, args.udp_port,complete=False)) as stream:
         logger.info(f"Streaming lidar data: {cfg.MODEL.NAME}:")
@@ -145,7 +145,7 @@ def main():
             if time.time()-start_stream > args.time:
                 break
             break
-        transmitter.stop_transmit()
+        transmitter.stop_transmit_udp()
     logger.info("Stream Done")
 
 if __name__ == '__main__':

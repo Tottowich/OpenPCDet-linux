@@ -89,7 +89,7 @@ def main():
     if args.ip is None and args.name is None:
         raise ValueError('Please specify the ip or sensor name of the ')
     vis = None
-    classes_to_visualize = None
+    classes_to_visualize = [9]
     logger = common_utils.create_logger()
     live = live_stream(cfg.DATA_CONFIG, cfg.CLASS_NAMES, logger=logger)
     model = initialize_network(cfg,args,logger,live)
@@ -99,7 +99,7 @@ def main():
         logger.info(f"Streaming lidar data: {cfg.MODEL.NAME}:")
         start_stream = time.time()
         
-        transmitter.start_transmit()
+        transmitter.start_transmit_udp()
         for scan in stream:
             xyz = utils_ouster.get_xyz(stream,scan)
             signal = utils_ouster.get_signal_reflection(stream,scan)
@@ -142,9 +142,6 @@ def main():
                             class_names=cfg.CLASS_NAMES,
                             )
                 logger.info(f"Visual time: {time.time() - start:.5f} <=> {1/(time.time() - start):.5f} Hz\n")
-            if transmitter is not None:
-                start = time.time()
-                logger.info(f"Time to send: {time.time() - start:.5f}")
             if time.time()-start_stream > args.time:
                 break
             break

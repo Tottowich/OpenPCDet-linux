@@ -9,7 +9,7 @@ class Transmitter():
     """
     Trasmitter using  mlsocket.
     """
-    def __init__(self, reciever_ip:str, reciever_port:int):
+    def __init__(self, reciever_ip:str, reciever_port:int,classes_to_send=None):
         """
         Args:
             reciever_ip: IP of the reciever.
@@ -18,40 +18,42 @@ class Transmitter():
         super().__init__()
         self.reciever_ip = reciever_ip
         self.reciever_port = reciever_port
+        self.classes_to_send = classes_to_send
         self.pcd = None
-        self.s = MLSocket()
+        self.s_ml = MLSocket()
+        self.s_udp = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
         self.pred_dict = None
-        self.started = False
-        self.thread = None
+        self.started_udp = False
+        self.thread_udp = None
 
         #try:
         #    self.sock.connect(self.reciever_ip)
         #except:
         #    print("Could not connect to the reciever.")
 
-    def send_dict(self, pcd,dict,classes_to_send=None):
+    def send_dict(self):
         """
         Send a dictionary.
         Args:
             dict: Dictionary to send.
         """
-        dict_human = {"pred_boxes": [], "pred_labels": [], "pred_scores": []}
-        for key, value in (dict.items()):
+        dict_selective = {"pred_boxes": [], "pred_labels": [], "pred_scores": []}
+        for key, value in (self.pred_dict.items()):
             if isinstance(value,torch.Tensor):
-                dict[key] = value.detach().cpu().tolist()
-            if isinstance(value,np.ndarray):
-                dict[key] = value.tolist()
-        if classes_to_send is not None:
-            for i,v in enumerate(dict["pred_labels"]):
-                print(v)
-                if v in classes_to_send:
-                    dict_human['pred_boxes'].append(dict["pred_boxes"][i])
-                    dict_human['pred_labels'].append(dict["pred_labels"][i])
-                    dict_human['pred_scores'].append(dict["pred_scores"][i])
-            dict = dict_human
-        dict["pcd"] = pcd.tolist()
+                self.pred_dict[key] = value.detach().cpu().tolist()
+            if isinstance(value,np.ndarray) or isinstance(value,np.array):
+                self.pred_dict[key] = value.tolist()
+        if self.classes_to_send is not None:
+            for i,v in enumerate(self.pred_dict["pred_labels"]):
+                #print(v)
+                if v in self.classes_to_send:
+                    dict_selective['pred_boxes'].append(self.pred_dict["pred_boxes"][i])
+                    dict_selective['pred_labels'].append(self.pred_dict["pred_labels"][i])
+                    dict_selective['pred_scores'].append(self.pred_dict["pred_scores"][i])
+            self.pred_dict = dict_selective
+        #dict["pcd"] = pcd.tolist()
         user_encode_data = json.dumps(dict).encode('utf-8')
-        self.send(user_encode_data, (self.reciever_ip, self.reciever_port))
+        self.s_udp.sendto(user_encode_data, (self.reciever_ip, self.reciever_port))
     def _check_connection(self):
         """
         Check if the connection is alive.
@@ -73,35 +75,45 @@ class Transmitter():
             self.connect((self.reciever_ip, self.reciever_port))
         except:
             return False
-    def start_transmit(self):
+    def start_transmit_udp(self):
         """
         Start the transmission.
         """
         try: 
-            self.s.connect((self.reciever_ip,self.reciever_port))
-            self.thread = threading.Thread(target=self.transmit)
-            self.thread.daemon = True
-            self.thread.start()
-            self.started = True
+            self.s_udp.connect((self.reciever_ip,self.reciever_port))
+            self.thread_udo = threading.Thread(target=self.transmit_udp)
+            self.thread_udp.daemon = True
+            self.started_udp = True
+            self.thread_udp.start()
         except:
-            print("Could not connect to the reciever.")
-    def stop_transmit(self):
+            raise ConnectionError
+    def stop_transmit_udp(self):
         """
         Stop the transmission.
         """
-        if self.started:
-            self.started = False
-            self.thread.join()
-    def transmit(self):
+        if self.started_udp:
+            self.started_udp = False
+            self.thread_udp.join()
+    def transmit_udp(self):
+        while self.started_udp:
+            if self.pred_dict is not None:
+                self.send_dict()
+        
+    def transmit_ml_socket(self):
         """
         Transmit the data.
         """
         print("Started Transmitter to {}:{}".format(self.reciever_ip, self.reciever_port))
-        while self.started:
+        while self.started_ml:
             if self.pcd is not None and self.pred_dict is not None:
                 print("SENDING DATA")
                 self.s.send(self.pcd)
                 try:
+                    for key, value in (self.pred_dict.items()):
+                        if isinstance(value,torch.Tensor):
+                            self.pred_dict[key] = value.detach().cpu().numpy()
+                    if self.classes_to_send is not None:
+                        indices = self.pred_dict["pred_labels"] in self.classes_to_send
                     pred_arr = np.concatenate([np.array(self.pred_dict["pred_boxes"]),np.array(self.pred_dict["pred_labels"]),np.array(self.pred_dict["pred_scores"])],axis=1)
                     self.s.send(pred_arr)
                     print(f"SENT : {pred_arr.shape}")

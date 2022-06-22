@@ -35,6 +35,9 @@ class live_stream(DatasetTemplate):
         self.training = False
         self.frame = 0
     def prep(self,points):
+        """
+        Prepare
+        """
         if self.name in ['NuScenesDataset']:
             points = np.concatenate((points,np.zeros((points.shape[0],1))),axis=1)
         input_dict = {

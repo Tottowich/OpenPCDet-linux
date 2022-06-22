@@ -1,3 +1,4 @@
+from encodings import normalize_encoding
 import socket
 import json
 import torch
@@ -57,6 +58,7 @@ class Transmitter():
             self.s_udp.sendto(user_encode_data, (self.reciever_ip, self.reciever_port))
         except:
             print(f"Could not send to {self.reciever_ip}")
+        self.s.pred_dict = None
     def _check_connection(self):
         """
         Check if the connection is alive.

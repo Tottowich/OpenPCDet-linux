@@ -58,7 +58,7 @@ class Transmitter():
             self.s_udp.sendto(user_encode_data, (self.reciever_ip, self.reciever_port))
         except:
             print(f"Could not send to {self.reciever_ip}")
-        self.s.pred_dict = None
+        self.pred_dict = None
     def _check_connection(self):
         """
         Check if the connection is alive.
@@ -85,11 +85,11 @@ class Transmitter():
         Start the transmission.
         """
         try: 
-            self.s_udp.connect((self.reciever_ip,self.reciever_port))
-            self.thread_udp = threading.Thread(target=self.transmit_udp)
-            self.thread_udp.daemon = True
             self.started_udp = True
-            self.thread_udp.start()
+            self.s_udp.connect((self.reciever_ip,self.reciever_port))
+            #self.thread_udp = threading.Thread(target=self.transmit_udp)
+            #self.thread_udp.daemon = True
+            #self.thread_udp.start()
         except:
             raise ConnectionError
     def stop_transmit_udp(self):
@@ -98,7 +98,7 @@ class Transmitter():
         """
         if self.started_udp:
             self.started_udp = False
-            self.thread_udp.join()
+            #self.thread_udp.join()
     def transmit_udp(self):
         while self.started_udp:
             if self.pred_dict is not None:

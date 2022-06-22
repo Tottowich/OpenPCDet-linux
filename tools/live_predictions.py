@@ -96,13 +96,13 @@ def main():
     logger = common_utils.create_logger()
     live = live_stream(cfg.DATA_CONFIG, cfg.CLASS_NAMES, logger=logger)
     model = initialize_network(cfg,args,logger,live)
-    transmitter = Transmitter(reciever_ip="192.168.200.103", reciever_port=7002)
+    transmitter = Transmitter(reciever_ip="192.168.200.103", reciever_port=7002, classes_to_send=[9])
     [cfg_ouster, host_ouster] = utils_ouster.sensor_config(args.name if args.name is not None else args.ip,args.udp_port,args.tcp_port)
+    transmitter.start_transmit_udp()
     with closing(client.Scans.stream(host_ouster, args.udp_port,complete=False)) as stream:
         logger.info(f"Streaming lidar data: {cfg.MODEL.NAME}:")
         start_stream = time.time()
         
-        transmitter.start_transmit_udp()
         for scan in stream:
             xyz = utils_ouster.get_xyz(stream,scan)
             signal = utils_ouster.get_signal_reflection(stream,scan)
@@ -121,6 +121,7 @@ def main():
             
             if len(pred_dicts[0]['pred_labels']) > 0:
                 display_predictions(pred_dicts,cfg.CLASS_NAMES,logger)
+
             if transmitter is not None:
                 #transmitter.pcd = copy(data_dict['points'][:,1:])
                 transmitter.pred_dict = copy(pred_dicts[0])
@@ -148,7 +149,7 @@ def main():
             if time.time()-start_stream > args.time:
                 break
             #break
-        transmitter.stop_transmit_udp()
+    transmitter.stop_transmit_udp()
     logger.info("Stream Done")
 
 if __name__ == '__main__':

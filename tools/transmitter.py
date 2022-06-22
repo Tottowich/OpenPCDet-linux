@@ -52,7 +52,7 @@ class Transmitter():
                     dict_selective['pred_scores'].append(self.pred_dict["pred_scores"][i])
             self.pred_dict = dict_selective
         #dict["pcd"] = pcd.tolist()
-        user_encode_data = json.dumps(dict).encode('utf-8')
+        user_encode_data = json.dumps(self.pred_dict).encode('utf-8')
         self.s_udp.sendto(user_encode_data, (self.reciever_ip, self.reciever_port))
     def _check_connection(self):
         """

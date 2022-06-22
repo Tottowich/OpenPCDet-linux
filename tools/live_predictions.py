@@ -119,7 +119,7 @@ def main():
             if len(pred_dicts[0]['pred_labels']) > 0:
                 display_predictions(pred_dicts,cfg.CLASS_NAMES,logger)
             if transmitter is not None:
-                transmitter.pcd = copy(data_dict['points'][:,1:])
+                #transmitter.pcd = copy(data_dict['points'][:,1:])
                 transmitter.pred_dict = copy(pred_dicts[0])
 
             #logger.info(f"Frame {live.frame}")

@@ -144,7 +144,7 @@ def main():
                 logger.info(f"Visual time: {time.time() - start:.5f} <=> {1/(time.time() - start):.5f} Hz\n")
             if time.time()-start_stream > args.time:
                 break
-            break
+            #break
         transmitter.stop_transmit_udp()
     logger.info("Stream Done")
 

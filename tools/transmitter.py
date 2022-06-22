@@ -41,7 +41,7 @@ class Transmitter():
         for key, value in (self.pred_dict.items()):
             if isinstance(value,torch.Tensor):
                 self.pred_dict[key] = value.detach().cpu().tolist()
-            if isinstance(value,np.ndarray) or isinstance(value,np.array):
+            if isinstance(value, np.ndarray):
                 self.pred_dict[key] = value.tolist()
         if self.classes_to_send is not None:
             for i,v in enumerate(self.pred_dict["pred_labels"]):
@@ -53,7 +53,10 @@ class Transmitter():
             self.pred_dict = dict_selective
         #dict["pcd"] = pcd.tolist()
         user_encode_data = json.dumps(self.pred_dict).encode('utf-8')
-        self.s_udp.sendto(user_encode_data, (self.reciever_ip, self.reciever_port))
+        try:
+            self.s_udp.sendto(user_encode_data, (self.reciever_ip, self.reciever_port))
+        except:
+            print(f"Could not send to {self.reciever_ip}")
     def _check_connection(self):
         """
         Check if the connection is alive.
@@ -81,7 +84,7 @@ class Transmitter():
         """
         try: 
             self.s_udp.connect((self.reciever_ip,self.reciever_port))
-            self.thread_udo = threading.Thread(target=self.transmit_udp)
+            self.thread_udp = threading.Thread(target=self.transmit_udp)
             self.thread_udp.daemon = True
             self.started_udp = True
             self.thread_udp.start()

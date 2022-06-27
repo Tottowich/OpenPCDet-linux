@@ -273,26 +273,41 @@ def draw_box(vis, gt_boxes, color=(0, 1, 0), ref_labels=None, ref_scores=None,cl
 
 
 class LiveVisualizer:
-    def __init__(self, 
-                    max_bboxes,
-                    draw_origin=False,
-                    show_labels=False,
-                    class_names=None,
-                    first_cloud=None,
-                    classes_to_visualize=None
+    def __init__(self,
+                    window_name:str='3D Viewer',
+                    window_size:tuple=(1920, 1080),
+                    point_size:float=1.0,
+                    background_color:np.ndarray=np.array((0, 0, 0)),
+                    draw_origin:bool=False,
+                    show_labels:bool=False,
+                    class_names:list=None,
+                    first_cloud:np.ndarray=None,
+                    classes_to_visualize:list=None,
+                    max_bboxes:int=None,
                 ):
         """
         Args:
-            max_bboxes (int): maximum number of bboxes to be drawn.
+            window_name (str): window name
+            window_size (tuple): window dimensions, (breath, height)
+            point_size (float): point size in the visualizer.
+            background_color (np.ndarray): background color of the 3D window.
             draw_origin (bool): whether to draw origin.
             show_labels (bool): whether to show labels.
             class_names (list[str]): class names.
+            first_cloud (np.ndarray): first cloud to be drawn, used to initialize the window.
+            classes_to_visualize (list[int]): classes to be visualized, if you do not want to visualize all classes of the dataset.
+            max_bboxes (int): maximum number of bboxes to be drawn, if None => inf, or as many as provided.
         """
-        self.first_cloud = first_cloud
-        self.max_bboxes = max_bboxes
+        self.window_name = window_name
+        self.window_size = window_size
+        self.point_size = point_size
+        self.background_color = background_color
         self.draw_origin = draw_origin
-        self.show_labels = show_labels
+        self.first_cloud = first_cloud
         self.class_names = class_names
+        self.max_bboxes = max_bboxes if max_bboxes is not None else 1000000 # Not truly infinite but almost :)
+        self.show_labels = show_labels
+        
         self.lidar_points = open3d.geometry.PointCloud()
         self.vis = open3d.visualization.Visualizer()
         if classes_to_visualize is not None:
@@ -307,15 +322,18 @@ class LiveVisualizer:
         self.started = False
 
     def initialize_visual(self):
+        """
+        Initialize the visualizer to display the live of point clouds with bounding boxes.
+        """
+        if self.first_cloud is None:
+            # Creates a random point cloud
+            self.first_cloud = np.random.random((10000, 3))
         if isinstance(self.first_cloud, torch.Tensor):
             self.first_cloud = self.first_cloud.cpu().numpy()
-        #if isinstance(gt_boxes, torch.Tensor):
-        #    gt_boxes = gt_boxes.cpu().numpy()
-        #if isinstance(ref_boxes, torch.Tensor):
-        #    ref_boxes = ref_boxes.cpu().numpy()
-        self.vis.create_window()
-        self.vis.get_render_option().point_size = 1.0
-        self.vis.get_render_option().background_color = np.zeros(3)
+        # Generate the window and assign
+        self.vis.create_window(self.window_name, width=self.window_size[0], height=self.window_size[1])
+        self.vis.get_render_option().point_size = self.point_size
+        self.vis.get_render_option().background_color = self.background_color
         if self.draw_origin:
             axis_pcd = open3d.geometry.TriangleMesh.create_coordinate_frame(size=1.0, origin=[0, 0, 0])
             self.vis.add_geometry(axis_pcd)

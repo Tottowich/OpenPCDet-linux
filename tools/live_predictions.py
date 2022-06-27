@@ -59,7 +59,8 @@ def display_predictions(pred_dict, class_names, logger=None):
 
 def initialize_network(cfg,args,logger,live=None):
     model = build_network(model_cfg=cfg.MODEL, num_class=len(cfg.CLASS_NAMES), dataset=live)
-    model.load_params_from_file(filename=args.ckpt, logger=logger, to_cpu=True)
+    if args.ckpt is not None:
+        model.load_params_from_file(filename=args.ckpt, logger=logger, to_cpu=True)
     model.cuda()
     model.eval()
     return model

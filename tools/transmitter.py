@@ -37,6 +37,7 @@ class Transmitter():
         self.started_udp = False
         self.started_ml = False
         self.thread_udp = None
+        self.thread_udp = None
 
         #try:
         #    self.sock.connect(self.reciever_ip)
@@ -50,12 +51,7 @@ class Transmitter():
             dict: Dictionary to send.
         """
         """
-        #dict_selective = {"pred_boxes": [], "pred_labels": [], "pred_scores": []}
-        #for key, value in (self.pred_dict.items()):
-        #    if isinstance(value,torch.Tensor):
-        #        self.pred_dict[key] = value.detach().cpu().tolist()
-            #if isinstance(value, np.ndarray):
-            #    self.pred_dict[key] = value.tolist()
+        
         """
         if isinstance(self.pred_dict["pred_labels"],torch.Tensor):
             self.pred_dict["pred_labels"] = self.pred_dict["pred_labels"].cpu().numpy()
@@ -80,7 +76,7 @@ class Transmitter():
             self.s_udp.sendto(predictions_encoded, (self.reciever_ip, self.reciever_port))
         except:
             print(f"Could not send to {self.reciever_ip}")
-        #self.pred_dict = None
+        self.pred_dict = None
     def send_pcd(self):
         if isinstance(self.pred_dict["pred_labels"],torch.Tensor):
             self.pred_dict["pred_labels"] = self.pred_dict["pred_labels"].cpu().numpy()
@@ -88,8 +84,8 @@ class Transmitter():
         pred_send = np.concatenate((self.pred_dict["pred_boxes"][indices,:],self.pred_dict["pred_labels"][indices,:],self.pred_dict["pred_scores"][indices,:]),axis=1)
         self.s_ml.send(self.pcd)
         self.s_ml.send(pred_send)
-
-        pass
+        self.pred_dict = None
+        self.pcd = None
     def start_transmit_ml(self):
         """
         Start the transmission.
@@ -109,6 +105,8 @@ class Transmitter():
     def stop_transmit_ml(self):
         if self.started_ml:
             self.started_ml = False
+            if self.thread_ml is not None:
+                self.thread_ml.join()
         
     def _check_connection(self):
         """
@@ -153,7 +151,8 @@ class Transmitter():
         """
         if self.started_udp:
             self.started_udp = False
-            #self.thread_udp.join()
+            if self.thread_udp is not None:
+                self.thread_udp.join()
     def transmit_udp(self):
         while self.started_udp:
             if self.pred_dict is not None:
@@ -161,7 +160,7 @@ class Transmitter():
         
     def transmit_ml_socket(self):
         """
-        Transmit the data.
+        Transmit the data via MLSocket.
         """
         print("Started Transmitter to {}:{}".format(self.reciever_ip, self.reciever_port))
         while self.started_ml:
@@ -181,29 +180,42 @@ class Transmitter():
                     pass
                 self.pcd = None
                 self.pred_dict = None
-if __name__ == "__main__":
-    #transmitter = Transmitter(reciever_ip="192.168.200.103", reciever_port= 7003)
-    #
-    #test_dict = {"pred_boxes":np.random.random((1,9)),"pred_scores": np.random.random((1,1)),"pred_labels": np.random.random([9])}
-    #transmitter.send_dict(np.random.random((500,3)),test_dict)
-    HOST = '192.168.200.103'
-    PORT = 1234
+def test_multiport_transmitter(host_udp:str=None,
+                               port_udp:int=None,
+                               host_ml:str=None,
+                               port_ml:int=None):
+    """
+    Test the multiport transmitter.
+    Args:
+        host_udp: The host (ip-adress) of the udp socket.
+        port_udp: The port of the udp socket.
+        host_ml: The host (ip-adress) of the ml socket.
+        port_ml: The port of the ml socket.
+    """
+    transmitter = Transmitter(host_udp,port_udp,host_ml,port_ml)
+    transmitter.start_transmit_udp()
+    transmitter.start_transmit_ml()
+    # Generate random point cloud, bounding box, labels and scores:
     detections = 10
     pcd = np.random.random((100000,3))
     bboxes = np.random.random((detections,3))
     lbls = np.random.randint(0,10,(detections,1))
     score = np.random.randint(0,10,(detections,1))
+    # dictionary of bounding boxes, labels and scores:
+    pred_dict = {"pred_boxes":bboxes,"pred_labels":lbls,"pred_scores":score}
+    # Send the data:
+    transmitter.pcd = pcd
+    transmitter.pred_dict = pred_dict
+    transmitter.send_pcd()
+    transmitter.send_dict()
 
-    d = {"pred_boxes": np.random.random((1,9)).tolist(),"pred_scores": np.random.random((1,1)).tolist(),"pred_labels": np.random.random([9]).tolist()}
-
-    with MLSocket() as s:
-        s.connect((HOST, PORT)) # Connect to the port and host
-        start = time.time()
-        #user_encode_data = json.dumps(d).encode('utf-8')
-        s.send(pcd)
-        a =  np.concatenate((bboxes,lbls,score),axis=1)
-        s.send(a)
-        print(f"Elapsed time: {time.time() - start}")
+    # Wait for the data to be received:
+    transmitter.stop_transmit_udp()
+    transmitter.stop_transmit_ml()
+    transmitter.close()
+    
+if __name__ == "__main__":
+    test_multiport_transmitter("192.168.200.103",7002,"192.168.200.103",7003)
 
 
 

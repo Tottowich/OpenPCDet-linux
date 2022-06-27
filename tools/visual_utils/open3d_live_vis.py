@@ -17,13 +17,13 @@ class LiveVisualizer:
                     window_size:tuple=(1920, 1080),
                     point_size:float=1.0,
                     background_color:np.ndarray=np.array((0, 0, 0)),
-                    label_colors:list[list]=box_colormap,
+                    label_colors:list=box_colormap,
                     draw_origin:bool=False,
                     show_labels:bool=False,
                     class_names:list=None,
                     first_cloud:np.ndarray=None,
                     classes_to_visualize:list=None,
-                    max_bboxes:int=None,
+                    max_bboxes:int=100,
                 ):
         """
         Args:
@@ -47,7 +47,7 @@ class LiveVisualizer:
         self.draw_origin = draw_origin
         self.first_cloud = first_cloud
         self.class_names = class_names
-        self.max_bboxes = max_bboxes if max_bboxes is not None else 1000000 # Not truly infinite but almost :)
+        self.max_bboxes = max_bboxes # Not truly infinite but almost :)
         self.show_labels = show_labels
         
         self.lidar_points = open3d.geometry.PointCloud()
@@ -73,6 +73,7 @@ class LiveVisualizer:
         if isinstance(self.first_cloud, torch.Tensor):
             self.first_cloud = self.first_cloud.cpu().numpy()
         # Generate the window and assign
+        
         self.vis.create_window(self.window_name, width=self.window_size[0], height=self.window_size[1])
         self.vis.get_render_option().point_size = self.point_size
         self.vis.get_render_option().background_color = self.background_color
@@ -90,6 +91,7 @@ class LiveVisualizer:
         #pts.points = open3d.utility.Vector3dVector(self.first_cloud[:, :3])    
         self.vis.poll_events()
         self.vis.update_renderer()
+        self.vis.run()
         
     def update(self,
                points, 

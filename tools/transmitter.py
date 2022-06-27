@@ -13,8 +13,8 @@ class Transmitter():
     def __init__(self, 
                     reciever_ip:str, 
                     reciever_port:int,
-                    ml_reciever_ip:str,
-                    ml_reciever_port:int,
+                    ml_reciever_ip:str=None,
+                    ml_reciever_port:int=None,
                     classes_to_send=None
                     ):
         """
@@ -38,6 +38,7 @@ class Transmitter():
         self.started_ml = False
         self.thread_udp = None
         self.thread_udp = None
+        self.previous_det = 0
 
         #try:
         #    self.sock.connect(self.reciever_ip)
@@ -53,14 +54,28 @@ class Transmitter():
         """
         
         """
+        if len(self.pred_dict["pred_labels"]) == 0:
+            try:
+                self.s_udp.sendto(0x0000000, (self.reciever_ip, self.reciever_port))
+            except:
+                pass
+            return
         if isinstance(self.pred_dict["pred_labels"],torch.Tensor):
             self.pred_dict["pred_labels"] = self.pred_dict["pred_labels"].cpu().numpy()
-        if self.classes_to_send is not None:
-            indices = [np.nonzero(sum(self.pred_dict["pred_labels"]==x for x in self.classes_to_send))[0].tolist()][0]
-            
-            self.pred_dict["pred_boxes"] = self.pred_dict["pred_boxes"][indices,:].tolist()
-            self.pred_dict["pred_labels"] = self.pred_dict["pred_labels"][indices,:].tolist()
-            self.pred_dict["pred_scores"] = self.pred_dict["pred_scores"][indices,:].tolist()
+        if isinstance(self.pred_dict["pred_boxes"],torch.Tensor):
+            self.pred_dict["pred_boxes"] = self.pred_dict["pred_boxes"].cpu().numpy()
+        if isinstance(self.pred_dict["pred_scores"],torch.Tensor):
+            self.pred_dict["pred_scores"] = self.pred_dict["pred_scores"].cpu().numpy()
+        self.pred_dict["pred_boxes"] = self.pred_dict["pred_boxes"].reshape(self.pred_dict["pred_boxes"].shape[0],-1).tolist()
+        self.pred_dict["pred_labels"] = self.pred_dict["pred_labels"].reshape(self.pred_dict["pred_labels"].shape[0],-1).tolist()
+        self.pred_dict["pred_scores"] = self.pred_dict["pred_scores"].reshape(self.pred_dict["pred_scores"].shape[0],-1).tolist()
+        #if self.classes_to_send is not None:
+        #
+        #    indices = [np.nonzero(sum(self.pred_dict["pred_labels"]==x for x in self.classes_to_send))[0].tolist()][0]
+        #    print(f"self.pred_dict['pred_labels'].shape: {self.pred_dict['pred_labels'].shape}")
+        #    self.pred_dict["pred_boxes"] = self.pred_dict["pred_boxes"][indices,:].tolist()
+        #    self.pred_dict["pred_labels"] = self.pred_dict["pred_labels"][indices,:].tolist()
+        #    self.pred_dict["pred_scores"] = self.pred_dict["pred_scores"][indices,:].tolist()
         """
             for i,v in enumerate(self.pred_dict["pred_labels"]):
                 print(v)
@@ -80,8 +95,10 @@ class Transmitter():
     def send_pcd(self):
         if isinstance(self.pred_dict["pred_labels"],torch.Tensor):
             self.pred_dict["pred_labels"] = self.pred_dict["pred_labels"].cpu().numpy()
-        indices = np.nonzero(sum(self.pred_dict["pred_labels"]==x for x in self.classes_to_send))[0].tolist()
-        pred_send = np.concatenate((self.pred_dict["pred_boxes"][indices,:],self.pred_dict["pred_labels"][indices,:],self.pred_dict["pred_scores"][indices,:]),axis=1)
+        #indices = np.nonzero(sum(self.pred_dict["pred_labels"]==x for x in self.classes_to_send))[0].tolist()
+        pred_send = np.concatenate((self.pred_dict["pred_boxes"],self.pred_dict["pred_labels"],self.pred_dict["pred_scores"]),axis=1)
+        
+        #pred_send = np.concatenate((self.pred_dict["pred_boxes"][indices,:],self.pred_dict["pred_labels"][indices,:],self.pred_dict["pred_scores"][indices,:]),axis=1)
         self.s_ml.send(self.pcd)
         self.s_ml.send(pred_send)
         self.pred_dict = None
@@ -203,9 +220,9 @@ def test_multiport_transmitter(host_udp:str=None,
     score = np.random.randint(0,10,(detections,1))
     # dictionary of bounding boxes, labels and scores:
     pred_dict = {"pred_boxes":bboxes,"pred_labels":lbls,"pred_scores":score}
+    transmitter.pred_dict = pred_dict
     # Send the data:
     transmitter.pcd = pcd
-    transmitter.pred_dict = pred_dict
     transmitter.send_pcd()
     transmitter.send_dict()
 
@@ -215,7 +232,7 @@ def test_multiport_transmitter(host_udp:str=None,
     transmitter.close()
     
 if __name__ == "__main__":
-    test_multiport_transmitter("192.168.200.103",7002,"192.168.200.103",7003)
+    test_multiport_transmitter("192.168.200.103",7002,"192.168.200.103",1234)
 
 
 

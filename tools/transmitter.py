@@ -122,8 +122,8 @@ class Transmitter():
     def stop_transmit_ml(self):
         if self.started_ml:
             self.started_ml = False
-            if self.thread_ml is not None:
-                self.thread_ml.join()
+            #if self.thread_ml is not None:
+            #    self.thread_ml.join()
         
     def _check_connection(self):
         """
@@ -168,8 +168,8 @@ class Transmitter():
         """
         if self.started_udp:
             self.started_udp = False
-            if self.thread_udp is not None:
-                self.thread_udp.join()
+            #if self.thread_udp is not None:
+            #    self.thread_udp.join()
     def transmit_udp(self):
         while self.started_udp:
             if self.pred_dict is not None:
@@ -190,7 +190,7 @@ class Transmitter():
                             self.pred_dict[key] = value.detach().cpu().numpy()
                     if self.classes_to_send is not None:
                         indices = self.pred_dict["pred_labels"] in self.classes_to_send
-                    pred_arr = np.concatenate([np.array(self.pred_dict["pred_boxes"]),np.array(self.pred_dict["pred_labels"]),np.array(self.pred_dict["pred_scores"])],axis=1)
+                    pred_arr = np.concatenate([np.array(self.pred_dict["pred_boxes"][:,:6]),np.array(self.pred_dict["pred_labels"]),np.array(self.pred_dict["pred_scores"])],axis=1)
                     self.s.send(pred_arr)
                     print(f"SENT : {pred_arr.shape}")
                 except:

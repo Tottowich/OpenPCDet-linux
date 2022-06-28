@@ -6,10 +6,13 @@ import re
 import sys
 import socket
 from transmitter import Transmitter
+from xr_synth_utils import filter_predictions
+from copy import copy
+
 from matplotlib.pyplot import cla
 
 
-from tools.visual_utils.open3d_vis_utils import LiveVisualizer
+from tools.visual_utils.open3d_live_vis import LiveVisualizer
 #sys.path.insert(0, '../../OusterTesting')
 #import utils_ouster
 try:
@@ -120,8 +123,9 @@ def main():
     model.load_params_from_file(filename=args.ckpt, logger=logger, to_cpu=True)
     model.cuda()
     model.eval()
+    i = 0
     #vis = LiveVisualizer(100,True)
-    client = udp_client.SimpleUDPClient(args.ip, args.port)
+    #client = udp_client.SimpleUDPClient(args.ip, args.port)
     with torch.no_grad():
         for idx, data_dict in enumerate(demo_dataset):
             logger.info(f'Visualized sample index: \t{idx + 1}')
@@ -130,39 +134,44 @@ def main():
             start = time.time()
             load_data_to_gpu(data_dict)
             logger.info(f"Loading Data to GPU loading took {time.time() - start:.5f} s.")
-            
+            classes_to_use = [8]
             logger.info(f"Running inference...")
             start = time.time()
             pred_dicts, _ = model.forward(data_dict)
-            if transmitter is not None:
-                transmitter.send_dict(copy(pred_dicts[0]))
+            print(pred_dicts)
+            #if transmitter is not None:
+            #    transmitter.send_dict(copy(pred_dicts[0]))
             logger.info(f"Infrence time: {time.time() - start:.5f} <=> {1/(time.time() - start):.5f} Hz")
             if len(pred_dicts[0]['pred_labels']) > 0:
                 display_predictions(pred_dicts,cfg.CLASS_NAMES,logger)
+            if classes_to_use is not None:
+                pred_dicts = filter_predictions(pred_dicts[0], classes_to_use)
+                print(f"Filtered pred_dicts: {pred_dicts}")
             #logger.info(f"Predction keys : ·{pred_dicts[0].keys()}")
             #logger.info(f"Predicitons : ·{pred_dicts[0]}")
-            if idx==0: # This could be run on a seperate thread!
-                #vis,pts, = V.create_live_scene(points=data_dict['points'][:,1:], 
-                #                                ref_boxes=pred_dicts[0]['pred_boxes'],
-                #                                ref_scores=pred_dicts[0]['pred_scores'], 
-                #                                ref_labels=pred_dicts[0]['pred_labels'],
-                #                                class_names=cfg.CLASS_NAMES)
-                vis = LiveVisualizer(59,True,class_names=cfg.CLASS_NAMES,first_cloud=data_dict['points'][:,1:])
+            if i == 0:
+                i += 1
+                vis = LiveVisualizer("XR-SYNTHESIZER",
+                                     class_names=cfg.CLASS_NAMES,
+                                     first_cloud=data_dict['points'][:,1:],
+                                     classes_to_visualize=classes_to_use
+                                     )
+                logger.info(f"Visualizing lidar data: {cfg.MODEL.NAME}:")
                 vis.update(points=data_dict['points'][:,1:], 
-                            ref_boxes=pred_dicts[0]['pred_boxes'],
-                            ref_labels=pred_dicts[0]['pred_labels'],
-                            class_names=cfg.CLASS_NAMES,
+                            ref_boxes=pred_dicts['pred_boxes'],
+                            ref_labels=pred_dicts['pred_labels'],
+                            ref_scores=pred_dicts['pred_scores'],
                             )
             else:
-                start = time.time()
+                start = time.monotonic()
                 #V.update_live_scene(vis,pts,points=data_dict['points'][:,1:], ref_boxes=pred_dicts[0]['pred_boxes'],
                 #    ref_scores=pred_dicts[0]['pred_scores'], ref_labels=pred_dicts[0]['pred_labels'],class_names=cfg.CLASS_NAMES)
                 vis.update(points=data_dict['points'][:,1:], 
-                            ref_boxes=pred_dicts[0]['pred_boxes'],
-                            ref_labels=pred_dicts[0]['pred_labels'],
-                            class_names=cfg.CLASS_NAMES,
+                            ref_boxes=pred_dicts['pred_boxes'],
+                            ref_labels=pred_dicts['pred_labels'],
+                            ref_scores=pred_dicts['pred_scores'],
                             )
-                logger.info(f"Visual time: {time.time() - start:.5f} <=> {1/(time.time() - start):.5f} Hz\n")
+                logger.info(f"Visual time: {time.monotonic() - start:.3e} <=> {1/(time.monotonic() - start):.3e} Hz")
            
             #V.draw_scenes(
             #    points=data_dict['points'][:,1:], ref_boxes=pred_dicts[0]['pred_boxes'],

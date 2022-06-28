@@ -4,7 +4,6 @@ import glob
 from pathlib import Path
 import time
 import numpy as np
-from tools.xr_synth_utils import CSVRecorder
 import torch
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -21,7 +20,6 @@ from visual_utils import open3d_vis_utils as V
 from pcdet.config import cfg, cfg_from_yaml_file
 from pcdet.datasets import DatasetTemplate
 from pcdet.models import build_network, load_data_to_gpu
-from xr_synth_utils import filter_predictions, CSVRecorder
 from pcdet.utils import common_utils
 class ouster_streamer:
     def __init__(self, stream):
@@ -52,12 +50,6 @@ class ouster_streamer:
         except:
             return None
 class live_stream(DatasetTemplate):
-    """
-    Class to stream data from a Sensor.
-    Inheritance:
-        DatasetTemplate:
-            Uses batch processing and collation.
-    """
     def __init__(self, dataset_cfg, class_names, root_path=None, logger=None):
         """
         Args:
@@ -101,8 +93,24 @@ def display_predictions(pred_dict, class_names, logger=None):
     logger.info(f"Model detected: {len(pred_dict['pred_labels'])} objects.")
     for lbls,score in zip(pred_dict['pred_labels'],pred_dict['pred_scores']):
         logger.info(f"lbls: {lbls} score: {score}")
-        logger.info(f"\t Prediciton {class_names[lbls[0]]}, id: {lbls[0]} with confidence: {score:.3e}.")
+        logger.info(f"\t Prediciton {class_names[lbls[0]-1]}, id: {lbls[0]-1} with confidence: {score:.5f}.")
 
+def filter_predictions(pred_dict, classes_to_use):
+    """
+    Filter predictions to only include the classes we want to use.
+    """
+    if isinstance(pred_dict["pred_labels"],torch.Tensor):
+            pred_dict["pred_labels"] = pred_dict["pred_labels"].cpu().numpy()
+    if isinstance(pred_dict["pred_boxes"],torch.Tensor):
+        pred_dict["pred_boxes"] = pred_dict["pred_boxes"].cpu().numpy()
+    if isinstance(pred_dict["pred_scores"],torch.Tensor):
+        pred_dict["pred_scores"] = pred_dict["pred_scores"].cpu().numpy()
+    if classes_to_use is not None and len(pred_dict["pred_labels"]) > 0:
+        indices = [np.nonzero(sum(pred_dict["pred_labels"]==x for x in classes_to_use))[0].tolist()][0]
+        pred_dict["pred_boxes"] = pred_dict["pred_boxes"].reshape(pred_dict["pred_boxes"].shape[0],-1)[indices,:]
+        pred_dict["pred_labels"] = pred_dict["pred_labels"].reshape(pred_dict["pred_labels"].shape[0],-1)[indices,:]
+        pred_dict["pred_scores"] = pred_dict["pred_scores"].reshape(pred_dict["pred_scores"].shape[0],-1)[indices,:]
+    return pred_dict
     
 def generate_distance_matrix(pred_dict):
     if isinstance(pred_dict["pred_boxes"],torch.Tensor):
@@ -138,102 +146,128 @@ def parse_config():
     parser.add_argument('--UE5_port', type=int, default=7000, help='specify the port of the UE5 machine')
     parser.add_argument('--time', type=int, default=100
     , help='specify the tcp port of the sensor')
-    parser.add_argument('--save_dir', type=str, default="../lidarCSV", help='specify the save directory')
-    parser.add_argument('--save_name', type=str, default=None, help='specify the save name')
     if sys.version_info >= (3,9):
         parser.add_argument('--visualize', action=argparse.BooleanOptionalAction)
-        parser.add_argument('--save_csv', action=argparse.BooleanOptionalAction)    
     else:
         parser.add_argument('--visualize', action='store_true')
         parser.add_argument('--no-visualize', dest='visualize', action='store_false')
-        parser.add_argument('--save_csv', action='store_true')
-        parser.add_argument('--no-save_csv', dest='save_csv', action='store_false')
-        parser.set_defaults(visualize=True)
-        parser.set_defaults(save_csv=False)
+        parser.set_defaults(feature=True)
     args = parser.parse_args()
 
     cfg_from_yaml_file(args.cfg_file, cfg)
 
     return args, cfg
+def get_ouster_data(stream):
+    scan = next(iter(stream))
+    xyz = utils_ouster.get_xyz(stream,scan)
+    signal = utils_ouster.get_signal_reflection(stream,scan)
+    xyzr = utils_ouster.convert_to_xyzr(xyz,signal)
+    return utils_ouster.compress_mid_dim(xyzr)
 
 
 @torch.no_grad()
 def main():
     args, cfg = parse_config()
+    args.visualize = False
     if args.OU_ip is None and args.name is None:
         raise ValueError('Please specify the ip or sensor name of the ')
-    # Select classes to use, None -> all.
-    classes_to_use = [8]
-    # Set up interactions
+    
+    classes_to_use = [9]
+
     logger = common_utils.create_logger()
     live = live_stream(cfg.DATA_CONFIG, cfg.CLASS_NAMES, logger=logger)
-    if args.save_csv:
-        recorder = CSVRecorder(args.save_name,args.save_dir, cfg.CLASS_NAMES)
-    
-    # Set up network
+
     model = initialize_network(cfg,args,logger,live)
-    
-    # Set up local network ports for IO
     transmitter = Transmitter(reciever_ip=args.TD_ip, reciever_port=args.TD_port, classes_to_send=[9])
     [cfg_ouster, host_ouster] = utils_ouster.sensor_config(args.name if args.name is not None else args.OU_ip,args.udp_port,args.tcp_port)
-    #transmitter.start_transmit_udp()
-    #transmitter.start_transmit_ml()
+    transmitter.start_transmit_udp()
+    transmitter.start_transmit_ml()
+    executor = ThreadPoolExecutor(max_workers=1)
 
     with closing(client.Scans.stream(host_ouster, args.udp_port,complete=False)) as stream:
-        logger.info(f"Streaming lidar data to: {cfg.MODEL.NAME}")
-        i = 0 # time 
-        
+        logger.info(f"Streaming lidar data: {cfg.MODEL.NAME}:")
+        i = 0
+        if False:
+            ous_stream = ouster_streamer(stream=stream)
+            ous_stream.start_thread()
+            start_stream = time.monotonic()
+            while time.monotonic()-start_stream <args.time:
+                pcd = ous_stream.get_pcd()
+                if pcd is not None:
+                    data_dict = live.prep(pcd)
+                    load_data_to_gpu(data_dict)
+                    #logger.info(f"Time to prep: {time.monotonic() - start}")
+                    start = time.monotonic()
+                    pred_dicts, _ = model.forward(data_dict)
+                    logger.info(f"Time to make predictions: {time.monotonic() - start:.5f} <=> {1/(time.monotonic() - start):.5f} Hz")
+        #ous_stream.stop_thread()
         start_stream = time.monotonic()
-        for scan in stream: # Ouster scan object
-            xyz = utils_ouster.get_xyz(stream,scan)
-            signal = utils_ouster.get_signal_reflection(stream,scan)
-            xyzr = utils_ouster.convert_to_xyzr(xyz,signal/255)
-            xyzr = utils_ouster.compress_mid_dim(xyzr)
+        while True:
+        #for scan in stream:
+            if i == 0:
+                start_time = time.monotonic()
+                scan = next(iter(stream))
+                xyz = utils_ouster.get_xyz(stream,scan)
+                signal = utils_ouster.get_signal_reflection(stream,scan)
+                xyzr = utils_ouster.convert_to_xyzr(xyz,signal)
+                xyzr = utils_ouster.compress_mid_dim(xyzr)
+            else:
+                if loader.done():
+                    logger.info(f"Loading from thread")
+                    xyzr = loader.result()
+                elif loader.running():
+                    logger.info(f"Waiting for thread to finish")
+                    while time.monotonic() - start_stream< args.time and not loader.done():
+                        time.sleep(0.005)
+                    xyzr = loader.result() if time.monotonic() - start_stream< args.time else None
+                else:
+                    logger.info(f"No data received")
+                    xyzr = None
+
+            if i == 1:
+                start_time = time.monotonic()
+            if i == 2:
+                end_time = time.monotonic()
+                logger.info(f"Time for one loop: {end_time-start_time:.5f} seconds.")
+            i += 1
+            
+            start = time.monotonic()
+            
+            logger.info(f"Time to process lidar data: {time.monotonic()-start:.5f}")
             #print(f"Input point cloud shape: {xyzr.shape}")
-            
-            
+            #start = time.monotonic()
             start = time.monotonic()
             data_dict = live.prep(xyzr)
-            logger.info(f"Time to process lidar data: {time.monotonic()-start:.3e}")
-            #print(f"data_dict: {data_dict}\npoints.shape = {data_dict['points'].shape}")
-            #print(f"points: {sum(data_dict['points'][:,0]==0)}")
-            #print(f"points: {(data_dict['points'][:8,:])}")
-
-            #print(f"points.shape: {data_dict['points'][0].shape}")
-            
-
-            start = time.monotonic()
+            logger.info(f"Time to prepare data: {time.monotonic()-start:.5f}")
             load_data_to_gpu(data_dict)
-            logger.info(f"Time to prep: {time.monotonic() - start}")
-
+            #logger.info(f"Time to prep: {time.monotonic() - start}")
             start = time.monotonic()
             pred_dicts, _ = model.forward(data_dict)
-            logger.info(f"Time to make predictions: {time.monotonic() - start:.3e} <=> {1/(time.monotonic() - start):.3e} Hz")
-            if classes_to_use is not None: # Only uses pred_dicts[0] since batch size is one at live infrence
+            loader = executor.submit(get_ouster_data, stream)
+            logger.info(f"Time to make predictions: {time.monotonic() - start:.5f} <=> {1/(time.monotonic() - start):.5f} Hz")
+            if classes_to_use is not None:
                 pred_dicts = filter_predictions(pred_dicts[0], classes_to_use)
-                #print(f"Filtered pred_dicts: {pred_dicts}")
             else:
                 pred_dicts = pred_dicts[0]
             #logger.info(f"Keys in pred_dicts: {pred_dicts[0].keys()}")
             
-            if len(pred_dicts["pred_labels"]) > 0:
-                display_predictions(pred_dicts,cfg.CLASS_NAMES,logger)
-            if args.save_csv: # If recording, save to csv
-                recorder.add_frame_file(copy(data_dict["points"][:,1:-1]).cpu().numpy(),pred_dicts)
-            
+            #if len(pred_dicts["pred_labels"]) > 0:
+            #    display_predictions(pred_dicts,cfg.CLASS_NAMES,logger)
+
             if transmitter.started_ml:
                 start = time.monotonic()
                 transmitter.pcd = copy(data_dict["points"][:,1:])
                 transmitter.pred_dict = copy(pred_dicts)
                 transmitter.send_pcd()
-                logger.info(f"Time to send pcd: {time.monotonic() - start:.3e}")
+                logger.info(f"Time to send pcd: {time.monotonic() - start:.5f}")
 
 
-            if transmitter.started_udp: # If transmitting, send to udp
+            if transmitter.started_udp:
                 start = time.monotonic()
+                #transmitter.pcd = copy(data_dict['points'][:,1:])
                 transmitter.pred_dict = copy(pred_dicts)
                 transmitter.send_dict()
-                logger.info(f"Time to send udp: {time.monotonic()-start:.3e}")
+                logger.info(f"Time to send udp: {time.monotonic()-start:.5f}")
 
             #logger.info(f"Frame {live.frame}")
             if live.frame == 1 and args.visualize:
@@ -242,7 +276,6 @@ def main():
                                      first_cloud=data_dict['points'][:,1:],
                                      classes_to_visualize=classes_to_use
                                      )
-                start_stream = time.monotonic()
                 logger.info(f"Visualizing lidar data: {cfg.MODEL.NAME}:")
                 vis.update(points=data_dict['points'][:,1:], 
                             ref_boxes=pred_dicts['pred_boxes'],
@@ -260,10 +293,10 @@ def main():
                             ref_labels=pred_dicts['pred_labels'],
                             ref_scores=pred_dicts['pred_scores'],
                             )
-                logger.info(f"Visual time: {time.monotonic() - start:.3e} <=> {1/(time.monotonic() - start):.3e} Hz")
+                logger.info(f"Visual time: {time.monotonic() - start:.5f} <=> {1/(time.monotonic() - start):.5f} Hz\n")
             if time.monotonic()-start_stream > args.time:
                 break
-            print("\n")
+            
     transmitter.stop_transmit_udp()
     transmitter.stop_transmit_ml()
     logger.info("Stream Done")

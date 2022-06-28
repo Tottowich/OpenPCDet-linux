@@ -136,13 +136,13 @@ class LiveVisualizer:
         if self.pred_boxes is not None:
             for i in range(self.max_bboxes):
                 if i < bboxes.shape[0]:
-                    if self.class_names[labels[i]-1] in self.classes_to_visualize:
+                    if self.class_names[int(labels[i])-1] in self.classes_to_visualize:
                         axis_angles = np.array([0, 0, bboxes[i][6] + 1e-10])
 
                         self.pred_boxes[i].R = open3d.geometry.get_rotation_matrix_from_axis_angle(axis_angles)
                         self.pred_boxes[i].center = bboxes[i][:3]
                         self.pred_boxes[i].extent = bboxes[i][3:6]
-                        self.pred_boxes[i].color = self.label_colors[labels[i]%4]  
+                        self.pred_boxes[i].color = self.label_colors[int(labels[i])%4]  
                         
                         self.vis.update_geometry(self.pred_boxes[i])
                         self.vis.poll_events()

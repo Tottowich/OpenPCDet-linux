@@ -13,5 +13,9 @@ venv/
 *.pkl
 *.zip
 *.bin
+*.pth
+*.csv
 output
 version.py
+lidarCSV/
+checkpoints/*.pth

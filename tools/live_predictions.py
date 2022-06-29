@@ -130,7 +130,8 @@ def main():
     [cfg_ouster, host_ouster] = utils_ouster.sensor_config(args.name if args.name is not None else args.OU_ip,args.udp_port,args.tcp_port)
     transmitter.start_transmit_udp()
     transmitter.start_transmit_ml()
-    if args.log_time:
+    log_time = False # False to let the program run for one loop to warm up :)
+    if args.log_time:       
         time_logger = TimeLogger(logger)
         time_logger.create_metric("Data Prep")
         time_logger.create_metric("Load GPU")
@@ -152,21 +153,22 @@ def main():
         i = 0 # time 
         
         start_stream = time.monotonic()
+        
         for scan in stream: # Ouster scan object
             xyz = utils_ouster.get_xyz(stream,scan)
             signal = utils_ouster.get_signal_reflection(stream,scan)
             xyzr = utils_ouster.convert_to_xyzr(xyz,signal)
             xyzr = utils_ouster.compress_mid_dim(xyzr)
             #print(f"Input point cloud shape: {xyzr.shape}")
-            if i%2 == 0:
+            if i%2 == 0 and log_time:
                 time_logger.start("Full Pipeline")
-            if i%2 == 1:
+            if i%2 == 1 and log_time and i != 1:
                 time_logger.stop("Full Pipeline")
             i+=1
-            if args.log_time:
+            if log_time:
                 time_logger.start("Data Prep")
             data_dict = live.prep(xyzr)
-            if args.log_time:
+            if log_time:
                 time_logger.stop("Data Prep")
             #print(f"data_dict: {data_dict}\npoints.shape = {data_dict['points'].shape}")
             #print(f"points: {sum(data_dict['points'][:,0]==0)}")
@@ -175,52 +177,52 @@ def main():
             #print(f"points.shape: {data_dict['points'][0].shape}")
             
 
-            if args.log_time:
+            if log_time:
                 time_logger.start("Load GPU")
             load_data_to_gpu(data_dict)
-            if args.log_time:
+            if log_time:
                 time_logger.stop("Load GPU")
 
-            if args.log_time:
+            if log_time:
                 time_logger.start("Infrence")
             pred_dicts, _ = model.forward(data_dict)
-            if args.log_time:
+            if log_time:
                 time_logger.stop("Infrence")
                 
-            if args.log_time:
+            if log_time:
                 time_logger.start("Filter Predictions")
             # Only uses pred_dicts[0] since batch size is one at live infrence
             pred_dicts = filter_predictions(pred_dicts[0], classes_to_use)
-            if args.log_time:
+            if log_time:
                 time_logger.stop("Filter Predictions")
                 
             
             if len(pred_dicts["pred_labels"]) > 0:
                 display_predictions(pred_dicts,cfg.CLASS_NAMES,logger)
             if args.save_csv: # If recording, save to csv
-                if args.log_time:
+                if log_time:
                     time_logger.start("Save CSV")
                 recorder.add_frame_file(copy(data_dict["points"][:,1:-1]).cpu().numpy(),pred_dicts)
-                if args.log_time:
+                if log_time:
                     time_logger.stop("Save CSV")
                 #logger.info(f"Time to save to csv: {time.monotonic() - start:.3e}")
             
             if transmitter.started_ml:
-                if args.log_time:
+                if log_time:
                     time_logger.start("Transmit UE5")
                 transmitter.pcd = copy(data_dict["points"][:,1:])
                 transmitter.pred_dict = copy(pred_dicts)
                 transmitter.send_pcd()
-                if args.log_time:
+                if log_time:
                     time_logger.stop("Transmit UE5")
 
 
             if transmitter.started_udp: # If transmitting, send to udp
-                if args.log_time:
+                if log_time:
                     time_logger.start("Transmit TD")
                 transmitter.pred_dict = copy(pred_dicts)
                 transmitter.send_dict()
-                if args.log_time:
+                if log_time:
                     time_logger.stop("Transmit TD")
 
             #logger.info(f"Frame {live.frame}")
@@ -243,23 +245,24 @@ def main():
                 start = time.monotonic()
                 #V.update_live_scene(vis,pts,points=data_dict['points'][:,1:], ref_boxes=pred_dicts[0]['pred_boxes'],
                 #    ref_scores=pred_dicts[0]['pred_scores'], ref_labels=pred_dicts[0]['pred_labels'],class_names=cfg.CLASS_NAMES)
-                if args.log_time:
+                if log_time:
                     time_logger.start("Visualize")
                 vis.update(points=data_dict['points'][:,1:], 
                             pred_boxes=pred_dicts['pred_boxes'],
                             pred_labels=pred_dicts['pred_labels'],
                             pred_scores=pred_dicts['pred_scores'],
                             )
-                if args.log_time:
+                if log_time:
                     time_logger.stop("Visualize")
             if time.monotonic()-start_stream > args.time:
                 break
-            if args.log_time:
+            if log_time:
                 print("\n")
+            log_time = args.log_time
                 
     transmitter.stop_transmit_udp()
     transmitter.stop_transmit_ml()
-    if args.log_time:
+    if log_time:
         time_logger.visualize_results()
     logger.info("Stream Done")
 

@@ -11,6 +11,9 @@ from queue import Queue
 from datetime import datetime as dt
 import matplotlib.pyplot as plt
 import pandas as pd
+import math
+pd.options.display.float_format = '{:,.4e}'.format
+
 import re
 sys.path.insert(0, '../../OusterTesting')
 import utils_ouster
@@ -191,20 +194,28 @@ class TimeLogger:
         time_max = {}
         time_min = {}
         self.time_pd = {}
-        for key in self.time_dict:
+        sum_ave = 0
+        keys = len(self.time_dict)
+        
+        fig,axs = plt.subplots(keys,1)
+        for i,key in enumerate(self.time_dict):
+           
+            axs[i].plot(self.time_dict[key]["times"],label=key)
+            axs[i].set_title(key)
             time_averages[key] = np.mean(self.time_dict[key]["times"])
             time_max[key] = self.maximum_time(key)
             time_min[key] = self.minimum_time(key)
-            self.time_pd[key] = self.time_dict[key]["times"]
-            #plt.show()
-        self.time_pd = pd.DataFrame(self.time_pd)
-        self.time_pd.plot()
+            sum_ave += time_averages[key] if key != "Full Pipeline" else 0
+            #self.time_pd[key] = self.time_dict[key]["times"]
+        plt.show()
+        #self.time_pd = pd.DataFrame(self.time_pd)
+        
         self.metrics_pd = pd.DataFrame([time_averages,time_max,time_min],index=["average","max","min"])
         if self.logger is not None:
-            self.logger.info(f"Table To summarize:\n{self.metrics_pd}")
+            self.logger.info(f"Table To summarize:\n{self.metrics_pd}\nSum of parts: {sum_ave:.3e} s\nLoading time: {self.metrics_pd['Full Pipeline']['average']-sum_ave:.3e} s\nFrames per second: {1/self.metrics_pd['Full Pipeline']['average']:.3e} Hz")
+
         else:
             print(f"Table To summarize:\n{self.metrics_pd}")
-
 if __name__ == "__main__":
     print("Hello World")
     T = TimeLogger()
@@ -212,7 +223,7 @@ if __name__ == "__main__":
     T.create_metric('a')
     T.create_metric('b')
     T.create_metric('c')
-    for i in range(1):
+    for i in range(3):
         T.start('a')
         time.sleep(np.random.random())
         T.stop('a')

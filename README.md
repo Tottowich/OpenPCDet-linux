@@ -1,5 +1,5 @@
 # XR-Synthesizer
-`XR-Synthesizer` is a project which uses an Ouster OS0 lidar to detect people and objects to generate music. This fork has added compatability for live data preperation, visualization and detection.
+`XR-Synthesizer` is a project which uses an Ouster OS0 lidar to detect people and objects in order to generate music. This fork has added compatability for live data preperation, visualization and detection.
 <img src="docs/open_mmlab.png" align="right" width="30%">
 
 # OpenPCDet

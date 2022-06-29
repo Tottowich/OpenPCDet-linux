@@ -179,18 +179,18 @@ def main():
                                      )
                 logger.info(f"Visualizing lidar data: {cfg.MODEL.NAME}:")
                 vis.update(points=data_dict['points'][:,1:], 
-                            ref_boxes=pred_dicts['pred_boxes'],
-                            ref_labels=pred_dicts['pred_labels'],
-                            ref_scores=pred_dicts['pred_scores'],
+                            pred_boxes=pred_dicts['pred_boxes'],
+                            pred_labels=pred_dicts['pred_labels'],
+                            pred_scores=pred_dicts['pred_scores'],
                             )
             elif args.visualize:
                 start = time.monotonic()
                 #V.update_live_scene(vis,pts,points=data_dict['points'][:,1:], ref_boxes=pred_dicts[0]['pred_boxes'],
                 #    ref_scores=pred_dicts[0]['pred_scores'], ref_labels=pred_dicts[0]['pred_labels'],class_names=cfg.CLASS_NAMES)
                 vis.update(points=data_dict['points'][:,1:], 
-                            ref_boxes=pred_dicts['pred_boxes'],
-                            ref_labels=pred_dicts['pred_labels'],
-                            ref_scores=pred_dicts['pred_scores'],
+                            pred_boxes=pred_dicts['pred_boxes'],
+                            pred_labels=pred_dicts['pred_labels'],
+                            pred_scores=pred_dicts['pred_scores'],
                             )
                 logger.info(f"Visual time: {time.monotonic() - start:.3e} <=> {1/(time.monotonic() - start):.3e} Hz")
            

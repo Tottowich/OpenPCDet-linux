@@ -18,6 +18,10 @@ box_colormap = (np.array([
 
 
 class LiveVisualizer:
+    """
+    Class for drawing bounding boxes on the live visualization.
+    It uses the open3d library to draw the bounding boxes.
+    """
     def __init__(self,
                     window_name:str='3D Viewer',
                     window_size:tuple=(1920, 1080),
@@ -98,29 +102,28 @@ class LiveVisualizer:
         self.frame_id +=1
         self.vis.poll_events()
         self.vis.update_renderer()
-        self.vis.run()
+        #self.vis.run()
 
         
     def update(self,
                points, 
-               ref_boxes=None, 
-               ref_labels=None, 
-               ref_scores=None):
+               pred_boxes=None, 
+               pred_labels=None, 
+               pred_scores=None):
         """
         Update the visualizer with new points and bounding boxes.
         Args:
-            points (np.ndarray): points to be visualized.
+            points (np.ndarray): points to be visualized (point cloud).
             ref_boxes (np.ndarray): reference bounding boxes.
             ref_labels (np.ndarray): reference labels.
             ref_scores (np.ndarray): reference scores.
-            point_colors (np.ndarray): point colors.
         """
         if isinstance(points, torch.Tensor):
             points = points.cpu().numpy()
-        if isinstance(ref_boxes, torch.Tensor):
-            ref_boxes = ref_boxes.cpu().numpy()
-        if isinstance(ref_labels, torch.Tensor):
-            ref_labels = ref_labels.cpu().numpy()
+        if isinstance(pred_boxes, torch.Tensor):
+            pred_boxes = pred_boxes.cpu().numpy()
+        if isinstance(pred_labels, torch.Tensor):
+            pred_labels = pred_labels.cpu().numpy()
         # Update enviroment points
         self.lidar_points.points = open3d.utility.Vector3dVector(points[:, :3])
         self.lidar_points.colors = open3d.utility.Vector3dVector(np.ones((points.shape[0], 3)))
@@ -128,9 +131,10 @@ class LiveVisualizer:
         
         # Update predicted Boxes
         #if ref_boxes is not None:
-        self.update_bboxes(ref_boxes, scores=ref_scores,labels=ref_labels)
+        self.update_bboxes(pred_boxes, scores=pred_scores,labels=pred_labels)
         if not self.started:
-            self.vis.run()
+            pass
+            #self.vis.run()
         self.vis.poll_events()
         self.vis.update_renderer()
     def update_bboxes(self, bboxes, scores, labels):
@@ -144,7 +148,6 @@ class LiveVisualizer:
         if self.pred_boxes is not None:
             for i in range(self.max_bboxes):
                 if bboxes is not None and i < bboxes.shape[0]:
-                    print(labels)
                     if self.class_names[int(labels[i])] in self.classes_to_visualize: 
                         axis_angles = np.array([0, 0, bboxes[i][6] + 1e-10])
 
@@ -167,7 +170,6 @@ class LiveVisualizer:
                     self.vis.update_renderer()
                 else:
                     self.previous_num_bboxes = len(bboxes) if bboxes is not None else 0
-                    return
                     break
     def zero_bounding_box(self,color=[0, 0, 0]):
         """

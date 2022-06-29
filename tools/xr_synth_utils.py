@@ -82,8 +82,11 @@ def display_predictions(pred_dict, class_names, logger=None):
     logger.info(f"Model detected: {len(pred_dict['pred_labels'])} objects.")
     for lbls,score in zip(pred_dict['pred_labels'],pred_dict['pred_scores']):
         logger.info(f"lbls: {lbls} score: {score}")
-        logger.info(f"\t Prediciton {class_names[lbls]}, id: {lbls} with confidence: {score:.3e}.")
+        logger.info(f"\t Prediciton {class_names[lbls[0]]}, id: {lbls[0]} with confidence: {score[0]:.3e}.")
 class CSVRecorder():
+    """
+    Class to record predictions and point clouds to a CSV file.
+    """
     def __init__(self, 
                  folder_name=f"csv_folder_{dt.now().strftime('%Y%m%d_%H%M%S')}",
                  main_folder="./lidarCSV",
@@ -102,7 +105,7 @@ class CSVRecorder():
             os.makedirs(self.path)
         self.frames = 0
     def process_labels(self,pred_dict):
-        boxes = np.array(pred_dict["pred_boxes"][:,:6])
+        boxes = np.array(pred_dict["pred_boxes"][:,:9])
         labels = np.array([self.class_names[int(x)] for x in pred_dict["pred_labels"]] if len(pred_dict["pred_labels"]) > 0 else []).reshape(-1,1)
         scores = np.array(pred_dict["pred_scores"]).reshape(-1,1)
         #print(f"boxes: {boxes}")
@@ -116,7 +119,7 @@ class CSVRecorder():
         cloud_name = os.path.join(self.path, f"cloud_{self.frames}.csv")
         label_name = os.path.join(self.path, f"label_{self.frames}.csv")
         np.savetxt(cloud_name, cloud, header = "x, y, z, r",delimiter=",")
-        np.savetxt(label_name, self.process_labels(pred_dict=pred_dict), header = "x, y, z, w, l, h, label, label_idx, score",delimiter=",",fmt="%s")
+        np.savetxt(label_name, self.process_labels(pred_dict=pred_dict), header = "x, y, z, rotx, roty, roz, l, w, h, label, label_idx, score",delimiter=",",fmt="%s")
         self.frames += 1
 
 class OusterStreamer():

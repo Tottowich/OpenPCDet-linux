@@ -21,7 +21,7 @@ from visual_utils import open3d_vis_utils as V
 from pcdet.config import cfg, cfg_from_yaml_file
 from pcdet.datasets import DatasetTemplate
 from pcdet.models import build_network, load_data_to_gpu
-from xr_synth_utils import CSVRecorder,filter_predictions,format_predictions
+from xr_synth_utils import CSVRecorder,filter_predictions,format_predictions,display_predictions
 from pcdet.utils import common_utils
 class live_stream(DatasetTemplate):
     """
@@ -61,30 +61,7 @@ class live_stream(DatasetTemplate):
         self.frame += 1
         data_dict = self.prepare_data(data_dict=input_dict)
         return self.collate_batch([data_dict])
-def display_predictions(pred_dict, class_names, logger=None):
-    """
-    Display predictions.
-    args:
-        pred_dict: prediction dictionary. "pred_boxes", "pred_labels", "pred_scores"
-        class_names: list of class names
-    """
-    if logger is None:
-        return
-    logger.info(f"Model detected: {len(pred_dict['pred_labels'])} objects.")
-    for lbls,score in zip(pred_dict['pred_labels'],pred_dict['pred_scores']):
-        logger.info(f"lbls: {lbls} score: {score}")
-        #print(f"lbls: {lbls} score: {score}")
-        logger.info(f"\t Prediciton {class_names[lbls[0]]}, id: {lbls[0]} with confidence: {score[0]:.3e}.")
 
-    
-def generate_distance_matrix(pred_dict):
-    if isinstance(pred_dict["pred_boxes"],torch.Tensor):
-        pred_dict["pred_boxes"] = pred_dict["pred_boxes"].cpu().numpy()
-    pred_dict["distance_matrix"] = np.zeros((pred_dict["pred_boxes"].shape[0],pred_dict["pred_boxes"].shape[0]))
-    for i in range(pred_dict["pred_boxes"].shape[0]):
-        for j in range(pred_dict["pred_boxes"].shape[0]):
-            pred_dict["distance_matrix"][i,j] = np.linalg.norm(pred_dict["pred_boxes"][i,:3]-pred_dict["pred_boxes"][j,:3])
-    return pred_dict
 
 def initialize_network(cfg,args,logger,live=None):
     model = build_network(model_cfg=cfg.MODEL, num_class=len(cfg.CLASS_NAMES), dataset=live)
@@ -224,9 +201,9 @@ def main():
                 start_stream = time.monotonic()
                 logger.info(f"Visualizing lidar data: {cfg.MODEL.NAME}:")
                 vis.update(points=data_dict['points'][:,1:], 
-                            ref_boxes=pred_dicts['pred_boxes'],
-                            ref_labels=pred_dicts['pred_labels'],
-                            ref_scores=pred_dicts['pred_scores'],
+                            pred_boxes=pred_dicts['pred_boxes'],
+                            pred_labels=pred_dicts['pred_labels'],
+                            pred_scores=pred_dicts['pred_scores'],
                             )
                 #vis = V.create_live_scene(data_dict['points'][:,1:],ref_boxes=pred_dicts[0]['pred_boxes'],
                 #ref_scores=pred_dicts[0]['pred_scores'], ref_labels=pred_dicts[0]['pred_labels'])
@@ -235,9 +212,9 @@ def main():
                 #V.update_live_scene(vis,pts,points=data_dict['points'][:,1:], ref_boxes=pred_dicts[0]['pred_boxes'],
                 #    ref_scores=pred_dicts[0]['pred_scores'], ref_labels=pred_dicts[0]['pred_labels'],class_names=cfg.CLASS_NAMES)
                 vis.update(points=data_dict['points'][:,1:], 
-                            ref_boxes=pred_dicts['pred_boxes'],
-                            ref_labels=pred_dicts['pred_labels'],
-                            ref_scores=pred_dicts['pred_scores'],
+                            pred_boxes=pred_dicts['pred_boxes'],
+                            pred_labels=pred_dicts['pred_labels'],
+                            pred_scores=pred_dicts['pred_scores'],
                             )
                 logger.info(f"Visual time: {time.monotonic() - start:.3e} <=> {1/(time.monotonic() - start):.3e} Hz")
             if time.monotonic()-start_stream > args.time:

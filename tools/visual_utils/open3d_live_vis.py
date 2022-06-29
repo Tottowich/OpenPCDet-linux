@@ -3,12 +3,18 @@ from sklearn.decomposition import non_negative_factorization
 import torch
 import numpy as np
 
-box_colormap = [
-    [1, 1, 1],
-    [0, 1, 0],
-    [0, 1, 1],
-    [1, 1, 0],
-]
+box_colormap = (np.array([
+    [118,255,212],# Car Turquoise,aquamarine1
+    [138,43,226], # Truck blueviolet
+    [255,127,0], # Construction orange
+    [255,215,0], # Bus yellow
+    [255,106,106], # Trailer p!nk
+    [127,127,127], # Barrier gray
+    [0,128,128],# Motorcycle Teal
+    [255,225,255], # Bicycle pinkish
+    [0,255,127], # Pedestrian lime
+    [0,245,255], # Trafic cone aquamarine
+])/255.0).tolist()
 
 
 class LiveVisualizer:
@@ -49,7 +55,7 @@ class LiveVisualizer:
         self.class_names = class_names
         self.max_bboxes = max_bboxes # Not truly infinite but almost :)
         self.show_labels = show_labels
-        
+        self.frame_id = 0
         self.lidar_points = open3d.geometry.PointCloud()
         self.vis = open3d.visualization.Visualizer()
         if classes_to_visualize is not None:
@@ -89,9 +95,11 @@ class LiveVisualizer:
             self.vis.add_geometry(self.lidar_points)
         #pts = open3d.geometry.PointCloud()
         #pts.points = open3d.utility.Vector3dVector(self.first_cloud[:, :3])    
+        self.frame_id +=1
         self.vis.poll_events()
         self.vis.update_renderer()
         self.vis.run()
+
         
     def update(self,
                points, 
@@ -119,8 +127,8 @@ class LiveVisualizer:
         self.vis.update_geometry(self.lidar_points)
         
         # Update predicted Boxes
-        if ref_boxes is not None:
-            self.update_bboxes(ref_boxes, scores=ref_scores,labels=ref_labels)
+        #if ref_boxes is not None:
+        self.update_bboxes(ref_boxes, scores=ref_scores,labels=ref_labels)
         if not self.started:
             self.vis.run()
         self.vis.poll_events()
@@ -135,14 +143,15 @@ class LiveVisualizer:
         """
         if self.pred_boxes is not None:
             for i in range(self.max_bboxes):
-                if i < bboxes.shape[0]:
-                    if self.class_names[int(labels[i])-1] in self.classes_to_visualize:
+                if bboxes is not None and i < bboxes.shape[0]:
+                    print(labels)
+                    if self.class_names[int(labels[i])] in self.classes_to_visualize: 
                         axis_angles = np.array([0, 0, bboxes[i][6] + 1e-10])
 
                         self.pred_boxes[i].R = open3d.geometry.get_rotation_matrix_from_axis_angle(axis_angles)
                         self.pred_boxes[i].center = bboxes[i][:3]
                         self.pred_boxes[i].extent = bboxes[i][3:6]
-                        self.pred_boxes[i].color = self.label_colors[int(labels[i])%4]  
+                        self.pred_boxes[i].color = self.label_colors[int(labels[i])] 
                         
                         self.vis.update_geometry(self.pred_boxes[i])
                         self.vis.poll_events()
@@ -157,7 +166,8 @@ class LiveVisualizer:
                     self.vis.poll_events()
                     self.vis.update_renderer()
                 else:
-                    self.previous_num_bboxes = len(bboxes)
+                    self.previous_num_bboxes = len(bboxes) if bboxes is not None else 0
+                    return
                     break
     def zero_bounding_box(self,color=[0, 0, 0]):
         """

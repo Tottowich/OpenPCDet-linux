@@ -21,36 +21,8 @@ from visual_utils import open3d_vis_utils as V
 from pcdet.config import cfg, cfg_from_yaml_file
 from pcdet.datasets import DatasetTemplate
 from pcdet.models import build_network, load_data_to_gpu
-from xr_synth_utils import filter_predictions, CSVRecorder
+from xr_synth_utils import CSVRecorder,filter_predictions,format_predictions
 from pcdet.utils import common_utils
-class ouster_streamer:
-    def __init__(self, stream):
-        self.stream = stream
-        self.started = False
-        self.q_xyzr = Queue()
-
-    def start_thread(self):
-        self.started = True
-        self.thread = threading.Thread(target=self.stream_loop)
-        #self.thread.daemon = True
-        self.thread.start()
-        time.sleep(0.2)
-    def stop_thread(self):
-        self.started = False
-        self.thread.join()
-    def stream_loop(self):
-        for scan in self.stream:
-            if not self.started:
-                break
-            xyz = utils_ouster.get_xyz(self.stream,scan)
-            signal = utils_ouster.get_signal_reflection(self.stream,scan)
-            xyzr = utils_ouster.convert_to_xyzr(xyz,signal)
-            self.q_xyzr.put(utils_ouster.compress_mid_dim(xyzr))
-    def get_pcd(self):
-        try:
-            return self.q_xyzr.get(timeout=1e-6)
-        except:
-            return None
 class live_stream(DatasetTemplate):
     """
     Class to stream data from a Sensor.
@@ -101,7 +73,8 @@ def display_predictions(pred_dict, class_names, logger=None):
     logger.info(f"Model detected: {len(pred_dict['pred_labels'])} objects.")
     for lbls,score in zip(pred_dict['pred_labels'],pred_dict['pred_scores']):
         logger.info(f"lbls: {lbls} score: {score}")
-        logger.info(f"\t Prediciton {class_names[lbls[0]]}, id: {lbls[0]} with confidence: {score:.3e}.")
+        #print(f"lbls: {lbls} score: {score}")
+        logger.info(f"\t Prediciton {class_names[lbls[0]]}, id: {lbls[0]} with confidence: {score[0]:.3e}.")
 
     
 def generate_distance_matrix(pred_dict):
@@ -139,7 +112,7 @@ def parse_config():
     parser.add_argument('--time', type=int, default=100
     , help='specify the tcp port of the sensor')
     parser.add_argument('--save_dir', type=str, default="../lidarCSV", help='specify the save directory')
-    parser.add_argument('--save_name', type=str, default=None, help='specify the save name')
+    parser.add_argument('--save_name', type=str, default="test_csv", help='specify the save name')
     if sys.version_info >= (3,9):
         parser.add_argument('--visualize', action=argparse.BooleanOptionalAction)
         parser.add_argument('--save_csv', action=argparse.BooleanOptionalAction)    
@@ -176,8 +149,8 @@ def main():
     # Set up local network ports for IO
     transmitter = Transmitter(reciever_ip=args.TD_ip, reciever_port=args.TD_port, classes_to_send=[9])
     [cfg_ouster, host_ouster] = utils_ouster.sensor_config(args.name if args.name is not None else args.OU_ip,args.udp_port,args.tcp_port)
-    #transmitter.start_transmit_udp()
-    #transmitter.start_transmit_ml()
+    transmitter.start_transmit_udp()
+    transmitter.start_transmit_ml()
 
     with closing(client.Scans.stream(host_ouster, args.udp_port,complete=False)) as stream:
         logger.info(f"Streaming lidar data to: {cfg.MODEL.NAME}")
@@ -187,10 +160,14 @@ def main():
         for scan in stream: # Ouster scan object
             xyz = utils_ouster.get_xyz(stream,scan)
             signal = utils_ouster.get_signal_reflection(stream,scan)
-            xyzr = utils_ouster.convert_to_xyzr(xyz,signal/255)
+            xyzr = utils_ouster.convert_to_xyzr(xyz,signal)
             xyzr = utils_ouster.compress_mid_dim(xyzr)
             #print(f"Input point cloud shape: {xyzr.shape}")
-            
+            if i%2 == 0:
+                start = time.monotonic()
+            if i%2 == 1:
+                end = time.monotonic()
+                logger.info(f"Time for lidar data: {end-start:.3e}")
             
             start = time.monotonic()
             data_dict = live.prep(xyzr)
@@ -204,7 +181,7 @@ def main():
 
             start = time.monotonic()
             load_data_to_gpu(data_dict)
-            logger.info(f"Time to prep: {time.monotonic() - start}")
+            logger.info(f"Time to prep: {time.monotonic() - start:.3e}")
 
             start = time.monotonic()
             pred_dicts, _ = model.forward(data_dict)
@@ -213,14 +190,15 @@ def main():
                 pred_dicts = filter_predictions(pred_dicts[0], classes_to_use)
                 #print(f"Filtered pred_dicts: {pred_dicts}")
             else:
-                pred_dicts = pred_dicts[0]
+                pred_dicts = format_predictions(pred_dicts[0])
             #logger.info(f"Keys in pred_dicts: {pred_dicts[0].keys()}")
             
             if len(pred_dicts["pred_labels"]) > 0:
                 display_predictions(pred_dicts,cfg.CLASS_NAMES,logger)
             if args.save_csv: # If recording, save to csv
+                start = time.monotonic()
                 recorder.add_frame_file(copy(data_dict["points"][:,1:-1]).cpu().numpy(),pred_dicts)
-            
+                logger.info(f"Time to save to csv: {time.monotonic() - start:.3e}")
             if transmitter.started_ml:
                 start = time.monotonic()
                 transmitter.pcd = copy(data_dict["points"][:,1:])

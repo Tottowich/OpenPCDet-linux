@@ -168,7 +168,7 @@ def main():
             if i%2 == 1:
                 end = time.monotonic()
                 logger.info(f"Time for lidar data: {end-start:.3e}")
-            
+            i+=1
             start = time.monotonic()
             data_dict = live.prep(xyzr)
             logger.info(f"Time to process lidar data: {time.monotonic()-start:.3e}")
@@ -199,6 +199,7 @@ def main():
                 start = time.monotonic()
                 recorder.add_frame_file(copy(data_dict["points"][:,1:-1]).cpu().numpy(),pred_dicts)
                 logger.info(f"Time to save to csv: {time.monotonic() - start:.3e}")
+            
             if transmitter.started_ml:
                 start = time.monotonic()
                 transmitter.pcd = copy(data_dict["points"][:,1:])

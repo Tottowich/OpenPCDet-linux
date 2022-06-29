@@ -9,6 +9,8 @@ from copy import copy
 import open3d
 from queue import Queue
 from datetime import datetime as dt
+import matplotlib.pyplot as plt
+import pandas as pd
 import re
 sys.path.insert(0, '../../OusterTesting')
 import utils_ouster
@@ -150,35 +152,75 @@ class OusterStreamer():
             return self.q_xyzr.get(timeout=1e-6)
         except:
             return None
-class TimeLogger():
-    def __init__(self):
+class TimeLogger:
+    def __init__(self,logger=None):
         super().__init__()
         self.time_dict = {}
         self.time_pd = None
+        self.metrics_pd = None
+        self.logger = logger
+        self.print_log = True
 
+    def output_log(self,name):
+        if self.logger is not None:
+            self.logger.info(f"{name}: {self.time_dict[name]['times'][-1]:.3e} s <=> {1/self.time_dict[name]['times'][-1]:.3e} Hz")
+        else:
+            print(f"{name}: {self.time_dict[name]['times'][-1]:.3e} s <=> {1/self.time_dict[name]['times'][-1]:.3e} Hz")
     def create_metric(self, name: str):
-        self.time_dict[name] = []
-    
-    def log_time(self, name: str, time: float):
-        self.time_dict[name].append(time)
-    
+        self.time_dict[name] = {}
+        self.time_dict[name]["times"] = []
+        self.time_dict[name]["start"] = 0
+        self.time_dict[name]["stop"] = 0   
+    def start(self, name: str):
+        self.time_dict[name]["start"] = time.monotonic()
+    def stop(self, name: str):
+        self.time_dict[name]["stop"] = time.monotonic()
+        self.time_dict[name]["times"].append(self.time_dict[name]["stop"] - self.time_dict[name]["start"])
+        if self.print_log:
+            self.output_log(name)
+    def log_time(self, name: str, _time: float):
+        self.time_dict[name]["times"].append(_time)
+    def maximum_time(self, name: str):
+        return max(self.time_dict[name]["times"])
+    def minimum_time(self, name: str):
+        return min(self.time_dict[name]["times"])
+    def average_time(self, name: str):
+        return np.mean(self.time_dict[name]["times"])
     def visualize_results(self):
         time_averages = {}
+        time_max = {}
+        time_min = {}
+        self.time_pd = {}
         for key in self.time_dict:
-            
-            plt.plot(range(0,len(self.time_dict [key])),self.time_dict[key])
-            time_averages[key] = np.mean(self.time_dict[key])
+            time_averages[key] = np.mean(self.time_dict[key]["times"])
+            time_max[key] = self.maximum_time(key)
+            time_min[key] = self.minimum_time(key)
+            self.time_pd[key] = self.time_dict[key]["times"]
             #plt.show()
-        time_pd = pd.DataFrame(time_averages,index=[0])
-        print(f"time_pd: {time_pd}")
+        self.time_pd = pd.DataFrame(self.time_pd)
+        self.time_pd.plot()
+        self.metrics_pd = pd.DataFrame([time_averages,time_max,time_min],index=["average","max","min"])
+        if self.logger is not None:
+            self.logger.info(f"Table To summarize:\n{self.metrics_pd}")
+        else:
+            print(f"Table To summarize:\n{self.metrics_pd}")
 
 if __name__ == "__main__":
+    print("Hello World")
     T = TimeLogger()
     data = {'a': np.random.rand(10), 'b': np.random.rand(10), 'c': np.random.rand(10)}
     T.create_metric('a')
     T.create_metric('b')
     T.create_metric('c')
-    T.log_time('a', data['a'])
-    T.log_time('b', data['b'])
-    T.log_time('c', data['c'])
+    for i in range(1):
+        T.start('a')
+        time.sleep(np.random.random())
+        T.stop('a')
+        T.start('b')
+        time.sleep(np.random.random())
+        T.stop('b')
+        T.start('c')
+        time.sleep(np.random.random())
+        T.stop('c')
+
     T.visualize_results()

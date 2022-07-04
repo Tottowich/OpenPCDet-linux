@@ -1,9 +1,8 @@
 import open3d
-from sklearn.decomposition import non_negative_factorization
 import torch
 import numpy as np
-
-box_colormap = (np.array([
+# NuScenes Dataset
+box_colormap_nuscenes = (np.array([
     [118,255,212],# Car Turquoise,aquamarine1
     [138,43,226], # Truck blueviolet
     [255,127,0], # Construction orange
@@ -16,7 +15,6 @@ box_colormap = (np.array([
     [0,245,255], # Trafic cone aquamarine
 ])/255.0).tolist()
 
-
 class LiveVisualizer:
     """
     Class for drawing bounding boxes on the live visualization.
@@ -27,7 +25,7 @@ class LiveVisualizer:
                     window_size:tuple=(1920, 1080),
                     point_size:float=1.0,
                     background_color:np.ndarray=np.array((0, 0, 0)),
-                    label_colors:list=box_colormap,
+                    label_colors:list=box_colormap_nuscenes,
                     draw_origin:bool=False,
                     show_labels:bool=False,
                     class_names:list=None,
@@ -195,3 +193,4 @@ class LiveVisualizer:
             self.vis.poll_events()
             self.vis.update_renderer()
         return self.pred_boxes
+a = LiveVisualizer()

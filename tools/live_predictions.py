@@ -70,6 +70,24 @@ def initialize_network(cfg,args,logger,live=None):
     model.cuda()
     model.eval()
     return model
+def initialize_timer(transmitter,logger,args):
+    time_logger = TimeLogger(logger,args.disp_pred)
+    time_logger.create_metric("Ouster Processing")
+    time_logger.create_metric("Data Prep")
+    time_logger.create_metric("Load GPU")
+    time_logger.create_metric("Infrence")
+    time_logger.create_metric("Filter Predictions")
+    if args.visualize:
+        time_logger.create_metric("Visualize")
+    if args.save_csv:
+        time_logger.create_metric("Save CSV")
+    if transmitter.started_udp:
+        time_logger.create_metric("Transmit TD")
+    if transmitter.started_ml:
+        time_logger.create_metric("Transmit UE5")
+    time_logger.create_metric("Full Pipeline")
+
+    return time_logger
 
 def parse_config():
     parser = argparse.ArgumentParser(description='arg parser')
@@ -92,7 +110,10 @@ def parse_config():
     parser.add_argument('--save_name', type=str, default="test_csv", help='specify the save name')
     if sys.version_info >= (3,9):
         parser.add_argument('--visualize', action=argparse.BooleanOptionalAction)
-        parser.add_argument('--save_csv', action=argparse.BooleanOptionalAction)    
+        parser.add_argument('--save_csv', action=argparse.BooleanOptionalAction)
+        parser.add_argument('--log_time', action=argparse.BooleanOptionalAction)
+        parser.add_argument('--disp_pred', action=argparse.BooleanOptionalAction)  
+
     else:
         parser.add_argument('--visualize', action='store_true')
         parser.add_argument('--no-visualize', dest='visualize', action='store_false')
@@ -100,6 +121,8 @@ def parse_config():
         parser.add_argument('--no-save_csv', dest='save_csv', action='store_false')
         parser.add_argument('--log_time', action='store_true')
         parser.add_argument('--no-log_time', dest='log_time', action='store_false')
+        parser.add_argument('--disp_pred', action='store_true')
+        parser.add_argument('--no-disp_pred', dest='disp_pred', action='store_false')
         parser.set_defaults(visualize=True)
         parser.set_defaults(save_csv=False)
     args = parser.parse_args()
@@ -121,31 +144,20 @@ def main():
     live = live_stream(cfg.DATA_CONFIG, cfg.CLASS_NAMES, logger=logger)
     if args.save_csv:
         recorder = CSVRecorder(args.save_name,args.save_dir, cfg.CLASS_NAMES)
+    range_limit = [8.0,8.0,5] #x,y,z range limits in meters
+    if range_limit is not None:
+        cfg.DATA_CONFIG.POINT_CLOUD_RANGE = [-range_limit[0],-range_limit[1],-range_limit[2],range_limit[0],range_limit[1],range_limit[2]]
         
     # Set up network
     model = initialize_network(cfg,args,logger,live)
-    
     # Set up local network ports for IO
     transmitter = Transmitter(reciever_ip=args.TD_ip, reciever_port=args.TD_port, classes_to_send=[9])
-    [cfg_ouster, host_ouster] = utils_ouster.sensor_config(args.name if args.name is not None else args.OU_ip,args.udp_port,args.tcp_port)
     transmitter.start_transmit_udp()
     transmitter.start_transmit_ml()
+    [cfg_ouster, host_ouster] = utils_ouster.sensor_config(args.name if args.name is not None else args.OU_ip,args.udp_port,args.tcp_port)
     log_time = False # False to let the program run for one loop to warm up :)
-    if args.log_time:       
-        time_logger = TimeLogger(logger)
-        time_logger.create_metric("Data Prep")
-        time_logger.create_metric("Load GPU")
-        time_logger.create_metric("Infrence")
-        time_logger.create_metric("Filter Predictions")
-        if args.visualize:
-            time_logger.create_metric("Visualize")
-        if args.save_csv:
-            time_logger.create_metric("Save CSV")
-        if transmitter.started_udp:
-            time_logger.create_metric("Transmit TD")
-        if transmitter.started_ml:
-            time_logger.create_metric("Transmit UE5")
-        time_logger.create_metric("Full Pipeline")
+    if args.log_time:
+        time_logger = initialize_timer(logger=logger,transmitter=transmitter,args=args)
 
 
     with closing(client.Scans.stream(host_ouster, args.udp_port,complete=False)) as stream:
@@ -155,10 +167,17 @@ def main():
         start_stream = time.monotonic()
         
         for scan in stream: # Ouster scan object
+            if log_time:
+                time_logger.start("Ouster Processing")
             xyz = utils_ouster.get_xyz(stream,scan)
             signal = utils_ouster.get_signal_reflection(stream,scan)
             xyzr = utils_ouster.convert_to_xyzr(xyz,signal)
             xyzr = utils_ouster.compress_mid_dim(xyzr)
+            if range_limit is not None:
+                xyzr = utils_ouster.trim_xyzr(xyzr,range_limit)
+            #xyzr = utils_ouster.trim_data(data=xyzr,range_limit=range_limit,source=stream,scan=scan)
+            if log_time:
+                time_logger.stop("Ouster Processing")
             #print(f"Input point cloud shape: {xyzr.shape}")
             if i%2 == 0 and log_time:
                 time_logger.start("Full Pipeline")
@@ -197,7 +216,7 @@ def main():
                 time_logger.stop("Filter Predictions")
                 
             
-            if len(pred_dicts["pred_labels"]) > 0:
+            if len(pred_dicts["pred_labels"]) > 0 and args.disp_pred:
                 display_predictions(pred_dicts,cfg.CLASS_NAMES,logger)
             if args.save_csv: # If recording, save to csv
                 if log_time:
@@ -255,8 +274,9 @@ def main():
                 if log_time:
                     time_logger.stop("Visualize")
             if time.monotonic()-start_stream > args.time:
+                stream.close()
                 break
-            if log_time:
+            if log_time and args.disp_pred:
                 print("\n")
             log_time = args.log_time
                 

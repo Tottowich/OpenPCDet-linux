@@ -156,13 +156,16 @@ class OusterStreamer():
         except:
             return None
 class TimeLogger:
-    def __init__(self,logger=None):
+    def __init__(self,logger=None,disp_pred=False):
         super().__init__()
         self.time_dict = {}
         self.time_pd = None
         self.metrics_pd = None
         self.logger = logger
-        self.print_log = True
+        if disp_pred is not None:
+            self.print_log = disp_pred
+        else:
+            self.print_log = False
 
     def output_log(self,name):
         if self.logger is not None:

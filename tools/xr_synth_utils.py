@@ -13,10 +13,27 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import math
 pd.options.display.float_format = '{:,.4e}'.format
-
+import logging
 import re
 sys.path.insert(0, '../../OusterTesting')
 import utils_ouster
+def create_logger(log_file=None, rank=0, log_level=logging.INFO):
+    logger = logging.getLogger(__name__)
+    logger.setLevel(log_level if rank == 0 else 'ERROR')
+    formatter = logging.Formatter('%(asctime)s  %(levelname)5s  %(message)s')
+    console = logging.StreamHandler()
+    console.setLevel(log_level if rank == 0 else 'ERROR')
+    console.setFormatter(formatter)
+    logger.addHandler(console)
+    if log_file is not None:
+        file_handler = logging.FileHandler(filename=log_file)
+        file_handler.setLevel(log_level if rank == 0 else 'ERROR')
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+    logger.propagate = False
+    return logger
+
+
 
 def sorted_alphanumeric(data):
     """
@@ -187,11 +204,17 @@ class TimeLogger:
     def log_time(self, name: str, _time: float):
         self.time_dict[name]["times"].append(_time)
     def maximum_time(self, name: str):
-        return max(self.time_dict[name]["times"])
+        if self.time_dict[name]["times"] is not None and len(self.time_dict[name]["times"])>0:
+            return max(self.time_dict[name]["times"])
+        return 0
     def minimum_time(self, name: str):
-        return min(self.time_dict[name]["times"])
+        if self.time_dict[name]["times"] is not None and len(self.time_dict[name]["times"])>0:
+            return min(self.time_dict[name]["times"])
+        return 0
     def average_time(self, name: str):
-        return np.mean(self.time_dict[name]["times"])
+        if self.time_dict[name]["times"] is not None and len(self.time_dict[name]["times"])>0:
+            return np.mean(self.time_dict[name]["times"])
+        return 0
     def visualize_results(self):
         time_averages = {}
         time_max = {}

@@ -193,4 +193,3 @@ class LiveVisualizer:
             self.vis.poll_events()
             self.vis.update_renderer()
         return self.pred_boxes
-a = LiveVisualizer()

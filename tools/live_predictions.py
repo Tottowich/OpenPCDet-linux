@@ -201,8 +201,7 @@ def main():
             load_data_to_gpu(data_dict)
             if log_time:
                 time_logger.stop("Load GPU")
-            logger.info(f"data_dict: {data_dict}")
-            logger.info(f"data_dict keys: {data_dict.keys()}")
+            
             if log_time:
                 time_logger.start("Infrence")
             pred_dicts, _ = model.forward(data_dict)
@@ -280,7 +279,7 @@ def main():
             if log_time and args.disp_pred:
                 print("\n")
             log_time = args.log_time
-            break
+            
     transmitter.stop_transmit_udp()
     transmitter.stop_transmit_ml()
     if log_time:

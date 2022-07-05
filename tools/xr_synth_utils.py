@@ -226,19 +226,20 @@ class TimeLogger:
         fig,axs = plt.subplots(keys,1)
         for i,key in enumerate(self.time_dict):
            
-            axs[i].plot(self.time_dict[key]["times"],label=key)
-            axs[i].set_title(key)
-            time_averages[key] = np.mean(self.time_dict[key]["times"])
-            time_max[key] = self.maximum_time(key)
-            time_min[key] = self.minimum_time(key)
-            sum_ave += time_averages[key] if key != "Full Pipeline" else 0
+            if len(self.time_dict[key]["times"])>0:
+                axs[i].plot(self.time_dict[key]["times"],label=key)
+                axs[i].set_title(key)
+                time_averages[key] = np.mean(self.time_dict[key]["times"])
+                time_max[key] = self.maximum_time(key)
+                time_min[key] = self.minimum_time(key)
+                sum_ave += time_averages[key] if key != "Full Pipeline" else 0
             #self.time_pd[key] = self.time_dict[key]["times"]
         plt.show()
         #self.time_pd = pd.DataFrame(self.time_pd)
         
         self.metrics_pd = pd.DataFrame([time_averages,time_max,time_min],index=["average","max","min"])
         if self.logger is not None:
-            self.logger.info(f"Table To summarize:\n{self.metrics_pd}\nSum of parts: {sum_ave:.3e} s\nLoading time: {self.metrics_pd['Full Pipeline']['average']-sum_ave:.3e} s\nFrames per second: {1/self.metrics_pd['Full Pipeline']['average']:.3e} Hz")
+            self.logger.info(f"Table To summarize:\n{self.metrics_pd}\nSum of parts: {sum_ave:.3e} <=> {1/sum_ave} Hz s\nLoading time: {self.metrics_pd['Full Pipeline']['average']-sum_ave:.3e} s\nFrames per second: {1/self.metrics_pd['Full Pipeline']['average']:.3e} Hz")
 
         else:
             print(f"Table To summarize:\n{self.metrics_pd}")

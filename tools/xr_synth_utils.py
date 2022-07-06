@@ -17,6 +17,7 @@ import logging
 import re
 sys.path.insert(0, '../../OusterTesting')
 import utils_ouster
+SENSOR_HEIGHT = 1.0
 def create_logger(log_file=None, rank=0, log_level=logging.INFO):
     logger = logging.getLogger(__name__)
     logger.setLevel(log_level if rank == 0 else 'ERROR')
@@ -33,7 +34,70 @@ def create_logger(log_file=None, rank=0, log_level=logging.INFO):
     logger.propagate = False
     return logger
 
+def proj_and_format(pred,img0,scan,R=25,azi=90,logger=None):
+    img_height = img0.shape[1]
+    img_width = img0.shape[2]
+    
+    scale_y = scan.h/img_height
+    scale_x = scan.w/img_width 
+    
+    # print(f"Image height: {img_height}")
+    # print(f"Image width: {img_width}")
+    to_rad = np.pi/180
+    obj_dim = [] # center_x, center_y, center_z, width, height, depth, rotation_x, rotation_y, rotation_z
+    heights = []
+    
+    
+    for det in pred[0]:
+        xyxy = det[:4].cpu().numpy()
+        x0,y0,x1,y1 = xyxy
 
+        pol_c_x,pol_c_y = (x0+x1)/2,(y0+y1)/2
+        #pol_c_x = x0
+        #pol_c_y = y0
+        width = x1-x0
+        height = y1-y0
+
+        ix, iy = int(pol_c_x), int(pol_c_y)
+
+        x0_scaled,y0_scaled,x1_scaled,y1_scaled = x0*scale_x,y0*scale_y,x1*scale_x,y1*scale_y
+        #print(f"x0: {x0_scaled},y0: {y0_scaled},x1: {x1_scaled},y1: {y1_scaled}")
+        low_y = iy-10 if iy-10>=0 else 0
+        high_y = iy+10 if iy+10<img_height else img_height
+        low_x = ix-10 if ix-10>=0 else 0
+        high_x = ix+10 if ix+10<img_width else img_width
+        #print(f"low_y: {low_y},high_y: {high_y},low_x: {low_x},high_x: {high_x}")
+        r = np.median(img0[2,low_y:high_y,low_x:high_x].cpu().numpy())
+        #print(f"r: {r*R}")
+        theta = (y0_scaled+y1_scaled)/2 - scan.h/2
+        vert_dist = r*R*np.cos(theta*to_rad)
+        #print(f"pol_c_x: {pol_c_x}")
+        center_angles = 2*np.pi*(pol_c_x/img_width)
+        #print(center_angles)
+        lower_edge_angle = 2*np.pi*(x0/img_width)
+        upper_edge_angle = 2*np.pi*(x1/img_width)
+        #print("angles: ",angles)
+        center_x = -np.cos(center_angles)*vert_dist
+        low_x_edge = np.cos(lower_edge_angle)*vert_dist
+        high_x_edge = np.cos(upper_edge_angle)*vert_dist
+
+        center_y = np.sin(center_angles)*vert_dist
+        #low_y_edge = np.sin(lower_edge_angle)*vert_dist
+        #high_y_edge = np.sin(upper_edge_angle)*vert_dist
+        width = high_x_edge-low_x_edge
+
+        #print(f"theta: {theta}")
+        l = 2*np.tan(azi/2*to_rad)*vert_dist
+        #print(f"l: {l}")
+        det_h = l*(y1_scaled-y0_scaled)/scan.h
+        center_z = det_h/2-SENSOR_HEIGHT
+        rot = center_angles
+        obj_dim.append([center_x,center_y,center_z,0.3,0.3,det_h,0,0,rot])
+        #print(f"Det_h: {det_h}")
+        heights.append([det_h,r*R])
+    
+    pred_dict = {"pred_boxes": np.array(obj_dim), "pred_scores": np.array(pred[0].cpu())[:,4], "pred_labels": np.array(pred[0].cpu())[:,5]}
+    return pred_dict
 
 def sorted_alphanumeric(data):
     """
@@ -79,6 +143,13 @@ def generate_distance_matrix(pred_dict):
             pred_dict["distance_matrix"][i,j] = np.linalg.norm(pred_dict["pred_boxes"][i,:3]-pred_dict["pred_boxes"][j,:3])
     return pred_dict
 
+def get_xyz_from_predictions(pred_dict):
+    """
+    Get xyz coordinates from predictions.
+    """
+    
+    return pred_dict
+
 def format_predictions(pred_dict):
     """
     Format predictions to be more readable.
@@ -102,9 +173,10 @@ def display_predictions(pred_dict, class_names, logger=None):
     if logger is None:
         return
     logger.info(f"Model detected: {len(pred_dict['pred_labels'])} objects.")
-    for lbls,score in zip(pred_dict['pred_labels'],pred_dict['pred_scores']):
+    for box,lbls,score in zip(pred_dict['pred_boxes'],pred_dict['pred_labels'],pred_dict['pred_scores']):
         logger.info(f"lbls: {lbls} score: {score}")
         logger.info(f"\t Prediciton {class_names[lbls[0]]}, id: {lbls[0]} with confidence: {score[0]:.3e}.")
+        logger.info(f"\t Box: {box}")
 class CSVRecorder():
     """
     Class to record predictions and point clouds to a CSV file.

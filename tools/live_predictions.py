@@ -97,7 +97,7 @@ def parse_config():
     parser.add_argument('--ext', type=str, default='.bin', help='specify the extension of your point cloud data file')
     parser.add_argument('--OU_ip', type=str, default=None, help='specify the ip of the sensor')
     parser.add_argument('--UE5_ip', type=str, default=None, help='specify the ip of the UE5 machine')
-    parser.add_argument('--TD_ip', type=str, default=None, help='specify the ip of the TD machine')
+    parser.add_argument('--TD_ip', type=str, default="192.168.200.103", help='specify the ip of the TD machine')
 
     parser.add_argument('--name', type=str, default=None, help='specify the name of the sensor')
     parser.add_argument('--udp_port', type=int, default=7502, help='specify the udp port of the sensor')
@@ -216,7 +216,7 @@ def main():
                 time_logger.stop("Filter Predictions")
                 
             
-            if len(pred_dicts["pred_labels"]) > 0 and args.disp_pred:
+            if len(pred_dicts["pred_labels"]) > 0:# and args.disp_pred:
                 display_predictions(pred_dicts,cfg.CLASS_NAMES,logger)
             if args.save_csv: # If recording, save to csv
                 if log_time:

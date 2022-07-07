@@ -2,6 +2,7 @@ import argparse
 import os, sys
 import glob
 from pathlib import Path
+from telnetlib import SE
 import time
 import numpy as np
 import torch
@@ -18,6 +19,8 @@ import re
 sys.path.insert(0, '../../OusterTesting')
 import utils_ouster
 SENSOR_HEIGHT = 1.0
+HARD_WIDTH = 0.5
+
 def create_logger(log_file=None, rank=0, log_level=logging.INFO):
     logger = logging.getLogger(__name__)
     logger.setLevel(log_level if rank == 0 else 'ERROR')
@@ -33,6 +36,69 @@ def create_logger(log_file=None, rank=0, log_level=logging.INFO):
         logger.addHandler(file_handler)
     logger.propagate = False
     return logger
+def proj_alt(pred,img0,xyz,R=25,azi=90,logger=None):
+    #print(f"Image Shape: {img0.shape}")
+    img_height = img0.shape[1]
+    img_width = img0.shape[2]
+    offset = 2
+    #print(f"PCD Shape: {xyz.shape}")
+    scale_y = xyz.shape[0]/img_height
+    scale_x = xyz.shape[1]/img_width 
+    obj_dim = [] # center_x, center_y, center_z, width, height, depth, rotation_x, rotation_y, rotation_z
+    heights = []
+    for det in pred[0]:
+        xyxy = det[:4].cpu().numpy()
+        x0,y0,x1,y1 = xyxy
+        x0_scaled,y0_scaled,x1_scaled,y1_scaled = x0*scale_x,y0*scale_y,x1*scale_x,y1*scale_y
+        pol_c_x,pol_c_y = (x0+x1)/2,(y0+y1)/2
+        ix, iy = int(pol_c_x), int(pol_c_y)
+        
+        low_y,offset_low_y = [iy-offset,iy-offset] if iy-offset>=0 else [0,iy%offset]
+        high_y,offset_high_y = [iy+offset,iy+offset] if iy+offset<img_height else [img_height-1, img_height-iy-1]
+        low_x,offset_low_x =  [ix-offset,ix-offset] if ix-offset>=0 else [0,iy%offset]
+        high_x,offset_high_x = [ix+offset,ix+offset] if ix+offset<img_width else [img_width-1,img_width-iy-1]
+
+
+        # low_y = iy-offset if iy-offset>=0 else 0
+        
+        # high_y = iy+offset if iy+offset<img_height else img_height-1
+        # low_x = ix-offset if ix-offset>=0 else 0
+        # high_x = ix+offset if ix+offset<img_width else img_width-1
+
+        # print(low_y,high_y,low_x,high_x)
+        
+        # roi = img0[2,int(y0):int(y1),int(x0):int(x1)]
+        roi = img0[2,low_y:high_y,low_x:high_x]
+        #print(roi.median())
+        poi_img = np.unravel_index(np.argmin(np.abs(np.median(roi)-roi)),roi.shape)
+
+        #print(poi_img)
+        poi_scan  = [int((poi_img[0]+int(offset_low_y))*scale_y), int((poi_img[1]+int(offset_low_x))*scale_x)]
+        rot = -float(poi_scan[1])/xyz.shape[1]*2*np.pi
+        #print(rot)
+        #poi_scan = [int(iy*scale_y),int(ix*scale_x)]
+        #print(poi_scan)
+        center_x, center_y, center_z = xyz[poi_scan[0],poi_scan[1],:]
+        vert_dist = np.sqrt(center_x**2+center_y**2)
+        cone_height = 2*np.tan(azi/2)*vert_dist
+        height_cov = (y1-y0)/img_height
+        height = height_cov*cone_height/2
+        
+        circle_diam = 2*np.pi*vert_dist
+        width_cov = (x1-x0)/img_width
+        temp_width = width_cov*circle_diam
+        [width,breadth] = [temp_width,HARD_WIDTH] if temp_width>HARD_WIDTH else [HARD_WIDTH,temp_width]
+        
+        #2*(center_z+SENSOR_HEIGHT)
+        obj_dim.append([center_x,center_y,center_z,breadth,width,height,rot,0,0])
+    pred_dict = {"pred_boxes": np.array(obj_dim), "pred_scores": np.array(pred[0].cpu())[:,4], "pred_labels": np.array(pred[0].cpu())[:,5].astype(np.uint8)}
+
+    # if len(obj_dim) > 0:
+    #     pred_dict = {"pred_boxes": np.array(obj_dim), "pred_scores": np.array(pred[0].cpu())[:,4], "pred_labels": np.array(pred[0].cpu())[:,5].astype(np.uint8)}
+    # else:
+    #     pred_dict = {"pred_boxes": None, "pred_scores": None, "pred_labels": None}
+    return pred_dict
+
 
 def proj_and_format(pred,img0,scan,R=25,azi=90,logger=None):
     img_height = img0.shape[1]
@@ -51,6 +117,7 @@ def proj_and_format(pred,img0,scan,R=25,azi=90,logger=None):
     for det in pred[0]:
         xyxy = det[:4].cpu().numpy()
         x0,y0,x1,y1 = xyxy
+        
 
         pol_c_x,pol_c_y = (x0+x1)/2,(y0+y1)/2
         #pol_c_x = x0
@@ -95,10 +162,13 @@ def proj_and_format(pred,img0,scan,R=25,azi=90,logger=None):
         obj_dim.append([center_x,center_y,center_z,0.3,0.3,det_h,0,0,rot])
         #print(f"Det_h: {det_h}")
         heights.append([det_h,r*R])
-    
-    pred_dict = {"pred_boxes": np.array(obj_dim), "pred_scores": np.array(pred[0].cpu())[:,4], "pred_labels": np.array(pred[0].cpu())[:,5]}
-    return pred_dict
+    pred_dict = {"pred_boxes": np.array(obj_dim), "pred_scores": np.array(pred[0].cpu())[:,4], "pred_labels": np.array(pred[0].cpu())[:,5].astype(np.uint8)}
 
+    # if len(obj_dim) > 0:
+    #     pred_dict = {"pred_boxes": np.array(obj_dim), "pred_scores": np.array(pred[0].cpu())[:,4], "pred_labels": np.array(pred[0].cpu())[:,5].astype(np.uint8)}
+    # else:
+    #     pred_dict = {"pred_boxes": None, "pred_scores": None, "pred_labels": None}
+    return pred_dict
 def sorted_alphanumeric(data):
     """
     Sort the given iterable in the way that humans expect.
@@ -174,8 +244,14 @@ def display_predictions(pred_dict, class_names, logger=None):
         return
     logger.info(f"Model detected: {len(pred_dict['pred_labels'])} objects.")
     for box,lbls,score in zip(pred_dict['pred_boxes'],pred_dict['pred_labels'],pred_dict['pred_scores']):
+        if isinstance(lbls,list):
+            lbls = lbls[0]
+        if isinstance(lbls,list):
+            box = box[0]
+        if isinstance(lbls,list):
+            score = score[0]
         logger.info(f"lbls: {lbls} score: {score}")
-        logger.info(f"\t Prediciton {class_names[lbls[0]]}, id: {lbls[0]} with confidence: {score[0]:.3e}.")
+        logger.info(f"\t Prediciton {class_names[lbls]}, id: {lbls} with confidence: {score:.3e}.")
         logger.info(f"\t Box: {box}")
 class CSVRecorder():
     """

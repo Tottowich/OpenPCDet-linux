@@ -54,21 +54,27 @@ class Transmitter():
         """
         
         """
-        if len(self.pred_dict["pred_labels"]) == 0:
-            try:
-                self.s_udp.sendto(0x0000000, (self.reciever_ip, self.reciever_port))
-            except:
-                pass
-            return
-        if isinstance(self.pred_dict["pred_labels"],torch.Tensor):
-            self.pred_dict["pred_labels"] = self.pred_dict["pred_labels"].cpu().numpy()
-        if isinstance(self.pred_dict["pred_boxes"],torch.Tensor):
-            self.pred_dict["pred_boxes"] = self.pred_dict["pred_boxes"].cpu().numpy()
-        if isinstance(self.pred_dict["pred_scores"],torch.Tensor):
-            self.pred_dict["pred_scores"] = self.pred_dict["pred_scores"].cpu().numpy()
-        self.pred_dict["pred_boxes"] = self.pred_dict["pred_boxes"].reshape(self.pred_dict["pred_boxes"].shape[0],-1).tolist()
-        self.pred_dict["pred_labels"] = self.pred_dict["pred_labels"].reshape(self.pred_dict["pred_labels"].shape[0],-1).tolist()
-        self.pred_dict["pred_scores"] = self.pred_dict["pred_scores"].reshape(self.pred_dict["pred_scores"].shape[0],-1).tolist()
+        # if len(self.pred_dict["pred_labels"]) == 0:
+        #     try:
+        #         self.s_udp.sendto(self.pred_dict, (self.reciever_ip, self.reciever_port))
+        #         print()
+        #     except:
+        #         pass
+        #     return
+        if len(self.pred_dict["pred_labels"]) > 0:
+            if isinstance(self.pred_dict["pred_labels"],torch.Tensor):
+                self.pred_dict["pred_labels"] = self.pred_dict["pred_labels"].cpu().numpy()
+            if isinstance(self.pred_dict["pred_boxes"],torch.Tensor):
+                self.pred_dict["pred_boxes"] = self.pred_dict["pred_boxes"].cpu().numpy()
+            if isinstance(self.pred_dict["pred_scores"],torch.Tensor):
+                self.pred_dict["pred_scores"] = self.pred_dict["pred_scores"].cpu().numpy()
+            self.pred_dict["pred_boxes"] = self.pred_dict["pred_boxes"].reshape(self.pred_dict["pred_boxes"].shape[0],-1).tolist()
+            self.pred_dict["pred_labels"] = self.pred_dict["pred_labels"].reshape(self.pred_dict["pred_labels"].shape[0],-1).tolist()
+            self.pred_dict["pred_scores"] = self.pred_dict["pred_scores"].reshape(self.pred_dict["pred_scores"].shape[0],-1).tolist()
+        else:
+            self.pred_dict["pred_boxes"] = self.pred_dict["pred_boxes"].tolist()
+            self.pred_dict["pred_labels"] = self.pred_dict["pred_labels"].tolist()
+            self.pred_dict["pred_scores"] = self.pred_dict["pred_scores"].tolist()
         #if self.classes_to_send is not None:
         #
         #    indices = [np.nonzero(sum(self.pred_dict["pred_labels"]==x for x in self.classes_to_send))[0].tolist()][0]

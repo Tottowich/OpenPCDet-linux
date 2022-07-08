@@ -80,7 +80,7 @@ class LiveVisualizer:
             self.first_cloud = np.random.random((10000, 3))
         if isinstance(self.first_cloud, torch.Tensor):
             self.first_cloud = self.first_cloud.cpu().numpy()
-        # Generate the window and assign
+        # Generate the window with the first cloud to make sure it is initialized
         
         self.vis.create_window(self.window_name, width=self.window_size[0], height=self.window_size[1])
         self.vis.get_render_option().point_size = self.point_size
@@ -89,14 +89,9 @@ class LiveVisualizer:
             axis_pcd = open3d.geometry.TriangleMesh.create_coordinate_frame(size=1.0, origin=[0, 0, 0])
             self.vis.add_geometry(axis_pcd)
         if self.first_cloud is not None:
-            #print(f"First clout: {self.first_cloud[:,:3].shape}")
-            #print(f"type self.lidar_points: {type(self.lidar_points)}")
             self.lidar_points.points = open3d.utility.Vector3dVector(self.first_cloud[:, :3])
             self.lidar_points.colors = open3d.utility.Vector3dVector(np.ones((self.first_cloud.shape[0], 3)))
-            #pts.colors = open3d.utility.Vector3dVector(np.ones((self.first_cloud.shape[0], 3)))
             self.vis.add_geometry(self.lidar_points)
-        #pts = open3d.geometry.PointCloud()
-        #pts.points = open3d.utility.Vector3dVector(self.first_cloud[:, :3])    
         self.frame_id +=1
         self.vis.poll_events()
         self.vis.update_renderer()
@@ -178,8 +173,6 @@ class LiveVisualizer:
         rot = open3d.geometry.get_rotation_matrix_from_axis_angle(axis_angles)
         box3d = open3d.geometry.OrientedBoundingBox(np.array([0,0,0]), rot,np.array([0,0,0]))
         box3d.color = [0.0,0.0,0.0]
-        #line_set = open3d.geometry.LineSet.create_from_oriented_bounding_box(box3d)
-        #line_set = line_set.paint_uniform_color([1,0,0])
         return box3d
     def initialize_bboxes(self):
         """

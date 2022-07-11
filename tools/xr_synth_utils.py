@@ -387,7 +387,7 @@ class TimeLogger:
         
         self.metrics_pd = pd.DataFrame([time_averages,time_max,time_min],index=["average","max","min"])
         if self.logger is not None:
-            self.logger.info(f"Table To summarize:\n{self.metrics_pd}\nSum of parts: {sum_ave:.3e} <=> {1/sum_ave} Hz s\nLoading time: {self.metrics_pd['Full Pipeline']['average']-sum_ave:.3e} s\nFrames per second: {1/self.metrics_pd['Full Pipeline']['average']:.3e} Hz")
+            self.logger.info(f"Table To summarize:\n{self.metrics_pd}\nSum of parts: {sum_ave:.3e} <=> {1/sum_ave:.3e} Hz s\nLoading time: {self.metrics_pd['Full Pipeline']['average']-sum_ave:.3e} s\nFrames per second: {1/self.metrics_pd['Full Pipeline']['average']:.3e} Hz")
 
         else:
             print(f"Table To summarize:\n{self.metrics_pd}")

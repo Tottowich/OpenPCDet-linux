@@ -50,8 +50,6 @@ class Transmitter():
         Send a dictionary.
         Args:
             dict: Dictionary to send.
-        """
-        """
         
         """
         # if len(self.pred_dict["pred_labels"]) == 0:

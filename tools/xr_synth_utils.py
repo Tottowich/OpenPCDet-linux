@@ -20,6 +20,7 @@ sys.path.insert(0, '../../OusterTesting')
 import utils_ouster
 SENSOR_HEIGHT = 1.0
 HARD_WIDTH = 0.5
+HEAD_PROPORTION = 1/7
 
 def create_logger(log_file=None, rank=0, log_level=logging.INFO):
     logger = logging.getLogger(__name__)
@@ -51,7 +52,11 @@ def proj_alt(pred,img0,xyz,R=25,azi=90,logger=None):
         x0,y0,x1,y1 = xyxy
         x0_scaled,y0_scaled,x1_scaled,y1_scaled = x0*scale_x,y0*scale_y,x1*scale_x,y1*scale_y
         pol_c_x,pol_c_y = (x0+x1)/2,(y0+y1)/2
+        head_size = 2*(y1-y0)*HEAD_PROPORTION
+        head_offset = ((y1-y0)/2-head_size) if pol_c_y+((y1-y0)/2-head_size) < img_height else 0
+        pol_c_y = pol_c_y-head_offset
         ix, iy = int(pol_c_x), int(pol_c_y)
+        
         
         low_y,offset_low_y = [iy-offset,iy-offset] if iy-offset>=0 else [0,iy%offset]
         high_y,offset_high_y = [iy+offset,iy+offset] if iy+offset<img_height else [img_height-1, img_height-iy-1]

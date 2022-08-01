@@ -21,7 +21,7 @@ import utils_ouster
 SENSOR_HEIGHT = 1.0
 HARD_WIDTH = 0.5
 HEAD_PROPORTION = 1/7
-
+HEAD_FACTOR = 2.0
 def create_logger(log_file=None, rank=0, log_level=logging.INFO):
     logger = logging.getLogger(__name__)
     logger.setLevel(log_level if rank == 0 else 'ERROR')
@@ -51,44 +51,34 @@ def proj_alt(pred,img0,xyz,R=25,azi=90,logger=None):
         xyxy = det[:4].cpu().numpy()
         x0,y0,x1,y1 = xyxy
         x0_scaled,y0_scaled,x1_scaled,y1_scaled = x0*scale_x,y0*scale_y,x1*scale_x,y1*scale_y
-        pol_c_x,pol_c_y = (x0+x1)/2,(y0+y1)/2
-        head_size = 2*(y1-y0)*HEAD_PROPORTION
-        head_offset = ((y1-y0)/2-head_size) if pol_c_y+((y1-y0)/2-head_size) < img_height else 0
-        pol_c_y = pol_c_y-head_offset
+        pol_c_x,c_y = (x0+x1)/2,(y0+y1)/2
+        head_size = (y1-y0)*HEAD_PROPORTION*HEAD_FACTOR
+        chest_offset = ((y1-y0)/2-head_size) if c_y+((y1-y0)/2-head_size) < img_height else 0
+        pol_c_y = c_y-chest_offset
         ix, iy = int(pol_c_x), int(pol_c_y)
         
-        
+        # Find region of interest, i.e. the chest.
         low_y,offset_low_y = [iy-offset,iy-offset] if iy-offset>=0 else [0,iy%offset]
         high_y,offset_high_y = [iy+offset,iy+offset] if iy+offset<img_height else [img_height-1, img_height-iy-1]
         low_x,offset_low_x =  [ix-offset,ix-offset] if ix-offset>=0 else [0,iy%offset]
         high_x,offset_high_x = [ix+offset,ix+offset] if ix+offset<img_width else [img_width-1,img_width-iy-1]
 
-
-        # low_y = iy-offset if iy-offset>=0 else 0
-        
-        # high_y = iy+offset if iy+offset<img_height else img_height-1
-        # low_x = ix-offset if ix-offset>=0 else 0
-        # high_x = ix+offset if ix+offset<img_width else img_width-1
-
-        # print(low_y,high_y,low_x,high_x)
-        
-        # roi = img0[2,int(y0):int(y1),int(x0):int(x1)]
         roi = img0[2,low_y:high_y,low_x:high_x]
-        #print(roi.median())
         poi_img = np.unravel_index(np.argmin(np.abs(np.median(roi)-roi)),roi.shape)
-
-        #print(poi_img)
+        
         poi_scan  = [int((poi_img[0]+int(offset_low_y))*scale_y), int((poi_img[1]+int(offset_low_x))*scale_x)]
         rot = -float(poi_scan[1])/xyz.shape[1]*2*np.pi
-        #print(rot)
-        #poi_scan = [int(iy*scale_y),int(ix*scale_x)]
-        #print(poi_scan)
-        center_x, center_y, center_z = xyz[poi_scan[0],poi_scan[1],:]
-        vert_dist = np.sqrt(center_x**2+center_y**2)
-        cone_height = 2*np.tan(azi/2)*vert_dist
-        height_cov = (y1-y0)/img_height
-        height = height_cov*cone_height/2
         
+        center_x, center_y, center_z = xyz[poi_scan[0],poi_scan[1],:]
+        vert_dist = np.sqrt(center_x**2+center_y**2)       
+        cone_height = 2*np.tan(azi/2)*vert_dist     #     /|
+        height_cov = (y1-y0)/img_height             #    / |
+        height = height_cov*cone_height/2           # [c]  |Cone height
+                                                    #  | \ |
+                                                    #  |  \|
+        z_offset = height*HEAD_PROPORTION*HEAD_FACTOR
+
+        center_z = center_z-z_offset
         circle_diam = 2*np.pi*vert_dist
         width_cov = (x1-x0)/img_width
         temp_width = width_cov*circle_diam
@@ -392,7 +382,7 @@ class TimeLogger:
         
         self.metrics_pd = pd.DataFrame([time_averages,time_max,time_min],index=["average","max","min"])
         if self.logger is not None:
-            self.logger.info(f"Table To summarize:\n{self.metrics_pd}\nSum of parts: {sum_ave:.3e} <=> {1/sum_ave:.3e} Hz s\nLoading time: {self.metrics_pd['Full Pipeline']['average']-sum_ave:.3e} s\nFrames per second: {1/self.metrics_pd['Full Pipeline']['average']:.3e} Hz")
+            self.logger.info(f"Table To summarize:\n{self.metrics_pd}\nSum of parts: {sum_ave:.3e} <=> {1/sum_ave:.3e} Hz s\nLoading time: {self.metrics_pd['Full Pipeline']['average']-sum_ave:.3e} s\nTime to spare: {1/20-sum_ave:.3e}\nFrames per second: {1/self.metrics_pd['Full Pipeline']['average']:.3e} Hz")
 
         else:
             print(f"Table To summarize:\n{self.metrics_pd}")

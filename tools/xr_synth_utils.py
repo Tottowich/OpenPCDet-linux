@@ -287,36 +287,44 @@ class CSVRecorder():
         np.savetxt(label_name, self.process_labels(pred_dict=pred_dict), header = "x, y, z, rotx, roty, roz, l, w, h, label, label_idx, score",delimiter=",",fmt="%s")
         self.frames += 1
 
-class OusterStreamer():
-    def __init__(self, stream):
-        self.stream = stream
-        self.started = False
-        self.q_xyzr = Queue()
+# class OusterStreamer():
+#     def __init__(self, stream):
+#         self.stream = stream
+#         self.started = False
+#         self.q_xyzr = Queue()
 
-    def start_thread(self):
-        self.started = True
-        self.thread = threading.Thread(target=self.stream_loop)
-        #self.thread.daemon = True
-        self.thread.start()
-        time.sleep(0.2)
-    def stop_thread(self):
-        self.started = False
-        self.thread.join()
-    def stream_loop(self):
-        for scan in self.stream:
-            if not self.started:
-                break
-            xyz = utils_ouster.get_xyz(self.stream,scan)
-            signal = utils_ouster.get_signal_reflection(self.stream,scan)
-            xyzr = utils_ouster.convert_to_xyzr(xyz,signal)
-            self.q_xyzr.put(utils_ouster.compress_mid_dim(xyzr))
-    def get_pcd(self):
-        try:
-            return self.q_xyzr.get(timeout=1e-6)
-        except:
-            return None
+#     def start_thread(self):
+#         self.started = True
+#         self.thread = threading.Thread(target=self.stream_loop)
+#         #self.thread.daemon = True
+#         self.thread.start()
+#         time.sleep(0.2)
+#     def stop_thread(self):
+#         self.started = False
+#         self.thread.join()
+#     def stream_loop(self):
+#         for scan in self.stream:
+#             if not self.started:
+#                 break
+#             xyz = utils_ouster.get_xyz(self.stream,scan)
+#             signal = utils_ouster.get_signal_reflection(self.stream,scan)
+#             xyzr = utils_ouster.convert_to_xyzr(xyz,signal)
+#             self.q_xyzr.put(utils_ouster.compress_mid_dim(xyzr))
+#     def get_pcd(self):
+#         try:
+#             return self.q_xyzr.get(timeout=1e-6)
+#         except:
+#             return None
 class TimeLogger:
+    """
+    Class to log time.
+    """
     def __init__(self,logger=None,disp_pred=False):
+        """
+        Args:
+            logger: logger object to print the time.
+            disp_pred: if True, display predictions.
+        """
         super().__init__()
         self.time_dict = {}
         self.time_pd = None
@@ -327,17 +335,34 @@ class TimeLogger:
         else:
             self.print_log = False
 
-    def output_log(self,name):
+    def output_log(self,name:str):
+        """
+        Output the time taken at each step.
+        Args:
+            name: name of the step, i.e. pre_process, post_process, etc.
+        """
         if self.logger is not None:
             self.logger.info(f"{name}: {self.time_dict[name]['times'][-1]:.3e} s <=> {1/self.time_dict[name]['times'][-1]:.3e} Hz")
         else:
             print(f"{name}: {self.time_dict[name]['times'][-1]:.3e} s <=> {1/self.time_dict[name]['times'][-1]:.3e} Hz")
     def create_metric(self, name: str):
+        """
+        Create a new metric beloning to the timelogger object.
+        Args:
+            name: name of the metric.
+        """
         self.time_dict[name] = {}
         self.time_dict[name]["times"] = []
         self.time_dict[name]["start"] = 0
         self.time_dict[name]["stop"] = 0   
     def start(self, name: str):
+        """
+
+        """
+        if name not in self.time_dict.keys():
+            self.create_metric(name)
+            if self.logger is not None:
+                self.logger.info(f"{name} had not been initialized, initializing now.")
         self.time_dict[name]["start"] = time.monotonic()
     def stop(self, name: str):
         self.time_dict[name]["stop"] = time.monotonic()
